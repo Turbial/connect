@@ -56,7 +56,7 @@ function platformBrief(platform: Platform): string {
 }
 
 /** Platforms that require a video asset rather than a static image. */
-const VIDEO_PLATFORMS = new Set<Platform>(["tiktok", "youtube", "vimeo"]);
+const VIDEO_PLATFORMS = new Set<Platform>(["tiktok", "youtube", "vimeo", "instagram"]);
 
 /** Platforms whose brief calls for hashtags, where SEO-optimized hashtag generation adds value. */
 const HASHTAG_PLATFORMS = new Set<Platform>(["instagram", "pinterest", "twitter", "tiktok", "mastodon", "tumblr", "vk", "flickr"]);

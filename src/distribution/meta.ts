@@ -36,19 +36,46 @@ export async function postToFacebookPage(business: Business, item: ContentItem):
   return { platformPostId: data.post_id ?? data.id };
 }
 
+/** Polls an Instagram Reels container until Meta finishes processing the uploaded
+ * video server-side; publishing before it's FINISHED returns an error. */
+async function waitForContainerReady(accessToken: string, containerId: string): Promise<void> {
+  const maxAttempts = 10;
+  const delayMs = 3000;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const res = await fetch(`${GRAPH_BASE}/${containerId}?fields=status_code&access_token=${accessToken}`);
+    if (!res.ok) {
+      throw new Error(`Instagram container status check failed: ${res.status}`);
+    }
+    const data = (await res.json()) as { status_code?: string };
+    if (data.status_code === "FINISHED") return;
+    if (data.status_code === "ERROR") {
+      throw new Error(`Instagram container ${containerId} failed processing`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  throw new Error(`Instagram container ${containerId} did not finish processing in time`);
+}
+
 export async function postToInstagram(business: Business, item: ContentItem): Promise<MetaPostResult> {
   if (!business.ig_business_id || !business.fb_page_access_token) {
     throw new Error(`Business ${business.id} is not connected to an Instagram Business account`);
   }
   if (!item.media_url) {
-    throw new Error(`Instagram posts require an image; content item ${item.id} has none`);
+    throw new Error(`Instagram posts require an image or video; content item ${item.id} has none`);
   }
 
   // Instagram publishing is two steps: create a media container, then publish it.
+  // Reels (video) containers take a moment to process the video server-side before
+  // they're publishable, unlike image containers which are ready immediately.
+  const isVideo = item.media_type === "video";
   const containerParams = new URLSearchParams({
     access_token: business.fb_page_access_token,
-    image_url: item.media_url,
     caption: item.caption,
+    ...(isVideo
+      ? { media_type: "REELS", video_url: item.media_url }
+      : { image_url: item.media_url }),
   });
   const containerRes = await fetch(`${GRAPH_BASE}/${business.ig_business_id}/media`, {
     method: "POST",
@@ -58,6 +85,10 @@ export async function postToInstagram(business: Business, item: ContentItem): Pr
     throw new Error(`Instagram media container failed for business ${business.id}: ${containerRes.status}`);
   }
   const container = (await containerRes.json()) as { id: string };
+
+  if (isVideo) {
+    await waitForContainerReady(business.fb_page_access_token, container.id);
+  }
 
   const publishParams = new URLSearchParams({
     access_token: business.fb_page_access_token,
