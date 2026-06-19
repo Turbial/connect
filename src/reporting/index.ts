@@ -6,7 +6,7 @@ import { getConnectionSummary } from "../lib/platformConnection.js";
 import { getLeadEventsForBusiness } from "../lib/leadEvents.js";
 import { getLeadIntentMessages } from "../lib/customerMessaging.js";
 import { getOrganizationForBusiness, orgDisplayName } from "../lib/orgSettings.js";
-import { getLatestVisibilityScore } from "../visibility-score/index.js";
+import { getLatestVisibilityScore, getRankedOrgVisibilityRollup } from "../visibility-score/index.js";
 import { getRecentlyResolvedFixes } from "../lib/nextBestFix.js";
 import { getBoostPerformance } from "../lib/boostReport.js";
 import { withRetry } from "../lib/retry.js";
@@ -247,6 +247,11 @@ export async function buildOrgWeeklyReport(organizationId: string): Promise<stri
 
   benchmark.sort((a, b) => b.views - a.views);
 
+  // Phase 9.2: visibility-score ranking, a separate comparison axis from the
+  // by-views benchmark above — unscored locations are listed but never
+  // ranked ahead of a real score.
+  const ranked = await getRankedOrgVisibilityRollup(organizationId);
+
   const lines = [
     `${orgDisplayName(organization as Organization)} Org Update — Week of ${formatWeekOf(new Date())} — ${(businesses ?? []).length} location${(businesses ?? []).length === 1 ? "" : "s"}`,
     `✅ ${publishedCount} post${publishedCount === 1 ? "" : "s"} published across all locations`,
@@ -256,6 +261,13 @@ export async function buildOrgWeeklyReport(organizationId: string): Promise<stri
     "",
     "Per-location benchmark (by views):",
     ...benchmark.map((b, i) => `${i + 1}. ${b.name} — ${b.published} published, ${b.views} views`),
+    "",
+    "Visibility score ranking:",
+    ...ranked.map((l) =>
+      l.rank !== null
+        ? `${l.rank}. ${l.businessName} — ${l.score}/100${l.gapFromOrgAverage !== null ? ` (${l.gapFromOrgAverage >= 0 ? "+" : ""}${l.gapFromOrgAverage} vs org avg)` : ""}`
+        : `— ${l.businessName} — not yet scored`
+    ),
   ];
 
   return lines.join("\n");

@@ -26,6 +26,38 @@ export function buildOrgVisibilityRollup(locations: { businessId: string; busine
   return { locations, averageScore };
 }
 
+export interface RankedOrgLocationScore extends OrgLocationScore {
+  /** 1-based rank among scored locations; null for an unscored location,
+   * which is never ranked ahead of (or interleaved with) a real score. */
+  rank: number | null;
+  /** Same "gap from neutral" framing as rankDrivers/renderWhatsNext — how
+   * far this location's score sits above or below the org average. Null
+   * when there's no org average to compare against (no scored locations at
+   * all) or this location itself has no score. */
+  gapFromOrgAverage: number | null;
+}
+
+/** Phase 9.2: orders an org's locations by score for comparison/ranking
+ * (doc §10's "location ranking") — a pure re-view of 8.6's rollup, no new
+ * data collection. Unscored locations sort last and never receive a rank,
+ * so an org of one location ranks that location #1 by construction. */
+export function rankOrgLocations(rollup: OrgVisibilityRollup): RankedOrgLocationScore[] {
+  const scored = rollup.locations.filter((l): l is OrgLocationScore & { score: number } => l.score !== null);
+  const unscored = rollup.locations.filter((l) => l.score === null);
+
+  const rankedScored = [...scored]
+    .sort((a, b) => b.score - a.score)
+    .map((location, i) => ({
+      ...location,
+      rank: i + 1,
+      gapFromOrgAverage: rollup.averageScore === null ? null : location.score - rollup.averageScore,
+    }));
+
+  const rankedUnscored = unscored.map((location) => ({ ...location, rank: null, gapFromOrgAverage: null }));
+
+  return [...rankedScored, ...rankedUnscored];
+}
+
 /** Fetches every business under an organization, plus each one's latest
  * visibility score, and rolls them up into a per-location list + average. */
 export async function getOrgVisibilityRollup(organizationId: string): Promise<OrgVisibilityRollup> {
@@ -40,6 +72,14 @@ export async function getOrgVisibilityRollup(organizationId: string): Promise<Or
   );
 
   return buildOrgVisibilityRollup(locations);
+}
+
+/** Phase 9.2: the ranked view of getOrgVisibilityRollup, for callers (e.g.
+ * buildOrgWeeklyReport) that want locations ordered for comparison rather
+ * than the unordered rollup. */
+export async function getRankedOrgVisibilityRollup(organizationId: string): Promise<RankedOrgLocationScore[]> {
+  const rollup = await getOrgVisibilityRollup(organizationId);
+  return rankOrgLocations(rollup);
 }
 
 /**
