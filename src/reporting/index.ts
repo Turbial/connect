@@ -29,13 +29,27 @@ export async function buildWeeklyReport(business: Business): Promise<string> {
   const typedPosts = (posts ?? []) as Post[];
   const totalViews = typedPosts.reduce((sum, p) => sum + p.views, 0);
   const totalCalls = typedPosts.reduce((sum, p) => sum + p.calls, 0);
+  const totalEngagement = typedPosts.reduce((sum, p) => sum + p.engagement, 0);
 
-  return [
+  const { data: boosts, error: boostError } = await supabase
+    .from("boost_trigger")
+    .select("*")
+    .eq("handed_off_to_marketing", true)
+    .in("post_id", typedPosts.map((p) => p.id).length > 0 ? typedPosts.map((p) => p.id) : ["00000000-0000-0000-0000-000000000000"]);
+  if (boostError) throw boostError;
+
+  const lines = [
     `Your MightyMax Update — Week of ${formatWeekOf(new Date())}`,
-    `✅ ${typedPosts.length} post${typedPosts.length === 1 ? "" : "s"} went live on Google`,
-    `👀 ${totalViews} people saw your posts`,
+    `✅ ${typedPosts.length} post${typedPosts.length === 1 ? "" : "s"} went live`,
+    `👀 ${totalViews} views, 💬 ${totalEngagement} engagements`,
     `📞 ${totalCalls} calls came from your Google profile`,
-  ].join("\n");
+  ];
+
+  if ((boosts ?? []).length > 0) {
+    lines.push(`🚀 ${boosts!.length} post${boosts!.length === 1 ? "" : "s"} turned into paid ads this week`);
+  }
+
+  return lines.join("\n");
 }
 
 export async function sendWeeklyReport(business: Business): Promise<void> {

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { supabase } from "../lib/supabase.js";
 import { collectPerformance } from "../performance/index.js";
+import { evaluateBoostTriggers } from "../trigger-engine/index.js";
 import type { Business } from "../types.js";
 
 async function main(): Promise<void> {
@@ -9,6 +10,7 @@ async function main(): Promise<void> {
 
   for (const business of (businesses ?? []) as Business[]) {
     await collectPerformance(business);
+    await evaluateBoostTriggers(business);
   }
 }
 

@@ -1,13 +1,21 @@
-import type { Business, GeneratedPost } from "../types.js";
+import type { Business, GeneratedPost, Platform } from "../types.js";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const FAL_URL = "https://fal.run/fal-ai/flux/schnell";
 
-async function generateCaption(business: Business): Promise<string> {
+const PLATFORM_BRIEF: Record<Platform, string> = {
+  gbp: "a short, local Google Business Profile post (under 1500 characters, no hashtags). Highlight a seasonal offer or recent work, written like a local update, not an ad.",
+  instagram: "a short, punchy Instagram caption (under 200 characters) built around a single strong visual moment, with 3-5 relevant hashtags at the end.",
+  facebook: "a longer, conversational Facebook post (300-600 characters) that tells a brief story about the business or a customer, no hashtags needed.",
+};
+
+async function generateCaption(business: Business, platform: Platform, context?: string): Promise<string> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
     return `Check out what's new at ${business.name} this week!`;
   }
+
+  const contextLine = context ? ` Base it on this: ${context}.` : "";
 
   const res = await fetch(DEEPSEEK_URL, {
     method: "POST",
@@ -20,7 +28,7 @@ async function generateCaption(business: Business): Promise<string> {
       messages: [
         {
           role: "user",
-          content: `Write a short, local, friendly Google Business Profile post (under 1500 characters, no hashtags) for ${business.name}, located in ${business.location ?? "the local area"}. Highlight a seasonal offer or recent work. Keep it specific and concrete, not generic marketing copy.`,
+          content: `Write ${PLATFORM_BRIEF[platform]} for ${business.name}, located in ${business.location ?? "the local area"}.${contextLine} Keep it specific and concrete, not generic marketing copy.`,
         },
       ],
     }),
@@ -34,10 +42,13 @@ async function generateCaption(business: Business): Promise<string> {
   return data.choices[0].message.content.trim();
 }
 
-async function generateImage(business: Business, caption: string): Promise<string | null> {
+async function generateImage(business: Business, caption: string, platform: Platform): Promise<string | null> {
   const apiKey = process.env.FAL_API_KEY;
   if (!apiKey) return null;
 
+  // GBP photos are roughly square; IG/FB Distribution Service crops per-platform at post time,
+  // so the Content Engine generates one square_hd source image and lets each platform adapter
+  // handle its own aspect ratio rather than generating separate images per platform.
   const res = await fetch(FAL_URL, {
     method: "POST",
     headers: {
@@ -58,8 +69,8 @@ async function generateImage(business: Business, caption: string): Promise<strin
   return data.images?.[0]?.url ?? null;
 }
 
-export async function generatePost(business: Business): Promise<GeneratedPost> {
-  const caption = await generateCaption(business);
-  const mediaUrl = await generateImage(business, caption);
+export async function generatePost(business: Business, platform: Platform = "gbp", context?: string): Promise<GeneratedPost> {
+  const caption = await generateCaption(business, platform, context);
+  const mediaUrl = await generateImage(business, caption, platform);
   return { caption, mediaUrl };
 }

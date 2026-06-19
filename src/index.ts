@@ -2,14 +2,11 @@ import "dotenv/config";
 import http from "node:http";
 import { supabase } from "./lib/supabase.js";
 import { handleSmsReply } from "./approval/index.js";
+import { hasPendingBoost, handleBoostReply } from "./approval/boost.js";
+import { handleReachReview } from "./reach-integration/index.js";
+import type { Business } from "./types.js";
 
-/** Minimal webhook receiver for inbound Twilio SMS replies (YES/NO/EDIT). */
-const server = http.createServer(async (req, res) => {
-  if (req.method !== "POST" || req.url !== "/webhooks/sms") {
-    res.writeHead(404).end();
-    return;
-  }
-
+async function handleSmsWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
   let body = "";
   for await (const chunk of req) body += chunk;
   const params = new URLSearchParams(body);
@@ -23,7 +20,7 @@ const server = http.createServer(async (req, res) => {
 
   const { data: business, error } = await supabase
     .from("business")
-    .select("id")
+    .select("*")
     .eq("owner_phone", from)
     .maybeSingle();
 
@@ -32,8 +29,50 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  await handleSmsReply(business.id, text);
+  // A BOOST-prefixed reply, or any pending boost prompt, takes priority over content approval
+  // so an owner replying to a boost SMS with plain "yes" still resolves the boost, not content.
+  const normalized = text.trim().toLowerCase();
+  if (normalized.startsWith("boost") || (await hasPendingBoost(business.id))) {
+    await handleBoostReply(business as Business, text);
+  } else {
+    await handleSmsReply(business.id, text);
+  }
+
   res.writeHead(200, { "Content-Type": "text/xml" }).end("<Response></Response>");
+}
+
+async function handleReachWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+
+  let payload;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    res.writeHead(400).end();
+    return;
+  }
+
+  if (!payload.business_id || !payload.review_id) {
+    res.writeHead(400).end();
+    return;
+  }
+
+  await handleReachReview(payload);
+  res.writeHead(200).end();
+}
+
+/** Webhook receiver for inbound Twilio SMS replies and Reach review events. */
+const server = http.createServer(async (req, res) => {
+  if (req.method === "POST" && req.url === "/webhooks/sms") {
+    await handleSmsWebhook(req, res);
+    return;
+  }
+  if (req.method === "POST" && req.url === "/webhooks/reach-review") {
+    await handleReachWebhook(req, res);
+    return;
+  }
+  res.writeHead(404).end();
 });
 
 const port = Number(process.env.PORT ?? 3000);

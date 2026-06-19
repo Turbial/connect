@@ -1,8 +1,15 @@
 import { supabase } from "../lib/supabase.js";
 import { postToGbp } from "./gbp.js";
-import type { Business, ContentItem } from "../types.js";
+import { postToFacebookPage, postToInstagram } from "./meta.js";
+import type { Business, ContentItem, Platform } from "../types.js";
 
-/** Posts every approved content item for a business to its target platforms (GBP only in Phase 1). */
+async function postToPlatform(business: Business, item: ContentItem, platform: Platform) {
+  if (platform === "gbp") return postToGbp(business, item);
+  if (platform === "facebook") return postToFacebookPage(business, item);
+  return postToInstagram(business, item);
+}
+
+/** Posts every approved content item for a business to its target platforms. */
 export async function postApprovedContent(business: Business): Promise<void> {
   const { data: items, error } = await supabase
     .from("content_item")
@@ -12,17 +19,17 @@ export async function postApprovedContent(business: Business): Promise<void> {
   if (error) throw error;
 
   for (const item of (items ?? []) as ContentItem[]) {
-    if (!item.platforms.includes("gbp")) continue;
+    for (const platform of item.platforms) {
+      const result = await postToPlatform(business, item, platform);
 
-    const result = await postToGbp(business, item);
-
-    const { error: postError } = await supabase.from("post").insert({
-      content_item_id: item.id,
-      platform: "gbp",
-      platform_post_id: result.platformPostId,
-      posted_at: new Date().toISOString(),
-    });
-    if (postError) throw postError;
+      const { error: postError } = await supabase.from("post").insert({
+        content_item_id: item.id,
+        platform,
+        platform_post_id: result.platformPostId,
+        posted_at: new Date().toISOString(),
+      });
+      if (postError) throw postError;
+    }
 
     await supabase.from("content_item").update({ status: "posted" }).eq("id", item.id);
   }

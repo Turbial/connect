@@ -1,41 +1,48 @@
 # Connect — MightyMax Distribution Layer
 
-Phase 1 of the MightyMax Visibility Engine: GBP-only organic posting with SMS/email
-owner approval and a weekly performance report. Built standalone — integration
-with MotionBlue, TurboAd, and Reach is deliberately deferred to later phases and
-isolated behind clear module boundaries below.
+The MightyMax Visibility Engine's Distribution Layer: organic posting (GBP, Facebook,
+Instagram) with SMS/email owner approval, an organic → paid boost trigger with real
+Meta/Google Ads campaign launch, and a review → content feedback loop fed by Reach.
+Built standalone — integration with MotionBlue, TurboAd, and Reach is isolated behind
+clear module boundaries below.
 
 ## Services
 
 | Module | Responsibility |
 |---|---|
-| `src/content-engine` | Generates post copy + images (DeepSeek + fal.ai, same pattern as TurboAd). Standalone today; designed so TurboAd or MotionBlue can supply input later without changing its interface. |
-| `src/approval` | Sends SMS (Twilio, new — no two-way SMS exists in Reach's toolkit) or email (reuses Reach's `email.send` via webhook) and parses YES/NO/EDIT replies. |
-| `src/distribution` | Posts approved content to GBP. `gbp.ts` isolates the actual Business Profile API calls behind an adapter. |
-| `src/performance` | Polls GBP Insights for posted items. |
-| `src/reporting` | Builds and sends the weekly owner-facing digest. |
+| `src/content-engine` | Generates platform-tailored post copy + images (DeepSeek + fal.ai). `connectedPlatforms()` determines which platforms a business posts to; `queueWeeklyContent` and `queueReviewTriggeredContent` (Phase 4) both fan out per-platform. |
+| `src/approval` | Sends SMS (Twilio) or email and parses content YES/NO/EDIT replies (`index.ts`/`sms.ts`/`email.ts`) and boost BOOST YES/NO replies (`boost.ts`). |
+| `src/distribution` | Posts approved content to GBP, Facebook Pages, and Instagram. `gbp.ts` and `meta.ts` isolate the actual API calls behind adapters; `index.ts` dispatches per item per platform. |
+| `src/performance` | Polls GBP Insights and Meta post insights for posted items. |
+| `src/trigger-engine` | Evaluates posted content against a views/engagement threshold and prompts the owner to approve a paid boost (Phase 3). |
+| `src/ads` | `creative.ts` generates ad copy/images from a high-performing organic post (TurboAd exposes no callable API, so this reimplements its DeepSeek/fal.ai pattern directly). `metaAds.ts`/`googleAds.ts` launch real, paused campaigns via the Meta Marketing API and Google Ads API. |
+| `src/reach-integration` | Handles inbound Reach review events: stores the review and, for positive reviews with text, queues review-triggered content (Phase 4). |
+| `src/reporting` | Builds and sends the weekly owner-facing digest, including boost/ad activity. |
 | `src/jobs/weeklyBatch.ts` | Cron entrypoint: generate → request approval → resolve timeouts → post approved → send report. |
-| `src/jobs/collectPerformance.ts` | Cron entrypoint: poll GBP Insights for all businesses. |
-| `src/index.ts` | HTTP server for Twilio's inbound SMS webhook (`/webhooks/sms`). |
-
-## Explicitly out of scope for Phase 1
-- Facebook/Instagram posting (Phase 2)
-- Organic → paid boost trigger and TurboAd/Meta-Ads/Google-Ads integration (Phase 3)
-- Reach review → content brief trigger (Phase 4)
-- Multi-location businesses
+| `src/jobs/collectPerformance.ts` | Cron entrypoint: poll insights for all businesses, then evaluate boost triggers. |
+| `src/index.ts` | HTTP server for Twilio's inbound SMS webhook (`/webhooks/sms`, disambiguating content vs. boost replies) and Reach's review webhook (`/webhooks/reach-review`). |
 
 ## Setup
-1. Copy `.env.example` to `.env` and fill in Supabase, Twilio, DeepSeek, fal.ai, and
-   Reach email webhook credentials.
+1. Copy `.env.example` to `.env` and fill in Supabase, Twilio, DeepSeek, fal.ai, Meta,
+   Google Ads, and Reach email webhook credentials.
 2. Run `db/schema.sql` against your Supabase project.
 3. `npm install`
 4. `npm run weekly` to run the weekly batch job manually, or wire it to a scheduler.
-5. `npm run dev` to start the SMS webhook server.
+5. `npm run collect` to poll performance and evaluate boost triggers.
+6. `npm run dev` to start the webhook server.
 
 ## Known gaps to resolve before production
 - `src/distribution/gbp.ts` targets the legacy Local Posts endpoint as a placeholder.
   Confirm the current Business Profile API surface once GBP API access is granted
-  (see open question in the original build plan — this has external approval lead time).
+  (this has external approval lead time, same as Google Ads developer token approval).
+- Meta/Google Ads campaigns are launched in `PAUSED` status by design — nothing spends
+  money until a human reviews and activates the campaign in-platform. Revisit once
+  there's appetite for fully automatic activation.
 - No retry/backoff on external API calls yet.
-- `business` rows (GBP tokens, owner contact info) are assumed to be seeded manually
-  for Phase 1; no onboarding UI exists.
+- Boost threshold (`VIEWS_THRESHOLD`/`ENGAGEMENT_THRESHOLD` in `trigger-engine/index.ts`)
+  and default boost budget (`DEFAULT_BUDGET_CENTS` in `approval/boost.ts`) are fixed
+  constants; no per-business configuration yet.
+- `business` rows (platform tokens, ad account ids, owner contact info) are assumed to
+  be seeded manually; no onboarding UI exists.
+- Pinterest, X, TikTok, LinkedIn, and YouTube are not covered — each would need its own
+  adapter in `src/distribution` plus a `PLATFORM_BRIEF` entry in `content-engine/generate.ts`.
