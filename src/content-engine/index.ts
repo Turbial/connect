@@ -15,6 +15,12 @@ export function connectedPlatforms(business: Business): Platform[] {
   if (business.snapchat_profile_id) platforms.push("snapchat");
   if (business.tiktok_user_id) platforms.push("tiktok");
   if (business.youtube_channel_id) platforms.push("youtube");
+  if (business.whatsapp_phone_number_id) platforms.push("whatsapp");
+  if (business.reddit_subreddit) platforms.push("reddit");
+  if (business.bluesky_handle) platforms.push("bluesky");
+  if (business.mastodon_instance_url) platforms.push("mastodon");
+  if (business.tumblr_blog_name) platforms.push("tumblr");
+  if (business.wechat_official_account_id) platforms.push("wechat");
   return platforms;
 }
 

@@ -1,10 +1,10 @@
 # Connect — MightyMax Distribution Layer
 
-The MightyMax Visibility Engine's Distribution Layer: organic posting across 12
+The MightyMax Visibility Engine's Distribution Layer: organic posting across 18
 platforms (GBP, Facebook, Instagram, Pinterest, X, LinkedIn, Threads, Yelp, Nextdoor,
-Snapchat, TikTok, YouTube) with SMS/email owner approval, an organic → paid boost
-trigger with real Meta/Google Ads campaign launch, and a review → content feedback
-loop fed by Reach.
+Snapchat, TikTok, YouTube, WhatsApp, Reddit, Bluesky, Mastodon, Tumblr, WeChat) with
+SMS/email owner approval, an organic → paid boost trigger with real Meta/Google Ads
+campaign launch, and a review → content feedback loop fed by Reach.
 Built standalone — integration with MotionBlue, TurboAd, and Reach is isolated behind
 clear module boundaries below.
 
@@ -14,7 +14,7 @@ clear module boundaries below.
 |---|---|
 | `src/content-engine` | Generates platform-tailored post copy + images/videos (DeepSeek + fal.ai). `connectedPlatforms()` determines which platforms a business posts to; `queueWeeklyContent` and `queueReviewTriggeredContent` (Phase 4) both fan out per-platform. TikTok/YouTube route through `generateVideo()` (fal.ai kling-video text-to-video) instead of the static-image path. |
 | `src/approval` | Sends SMS (Twilio) or email and parses content YES/NO/EDIT replies (`index.ts`/`sms.ts`/`email.ts`) and boost BOOST YES/NO replies (`boost.ts`). |
-| `src/distribution` | Posts approved content across all 12 connected platforms. Each platform's API calls are isolated behind its own adapter (`gbp.ts`, `meta.ts`, `pinterest.ts`, `twitter.ts`, `linkedin.ts`, `threads.ts`, `yelp.ts`, `nextdoor.ts`, `snapchat.ts`, `tiktok.ts`, `youtube.ts`); `index.ts` dispatches per item per platform. |
+| `src/distribution` | Posts approved content across all 18 connected platforms. Each platform's API calls are isolated behind its own adapter (`gbp.ts`, `meta.ts`, `pinterest.ts`, `twitter.ts`, `linkedin.ts`, `threads.ts`, `yelp.ts`, `nextdoor.ts`, `snapchat.ts`, `tiktok.ts`, `youtube.ts`, `whatsapp.ts`, `reddit.ts`, `bluesky.ts`, `mastodon.ts`, `tumblr.ts`, `wechat.ts`); `index.ts` dispatches per item per platform. |
 | `src/performance` | Polls each connected platform's insights/analytics API for posted items. |
 | `src/trigger-engine` | Evaluates posted content against a views/engagement threshold and prompts the owner to approve a paid boost (Phase 3). |
 | `src/ads` | `creative.ts` generates ad copy/images from a high-performing organic post (TurboAd exposes no callable API, so this reimplements its DeepSeek/fal.ai pattern directly). `metaAds.ts`/`googleAds.ts` launch real, paused campaigns via the Meta Marketing API and Google Ads API. |
@@ -68,3 +68,17 @@ clear module boundaries below.
 - Threads (`threads.ts`) uses a Threads-scoped access token, issued separately from
   the Instagram Graph token even though both are Meta products — don't assume
   `fb_page_access_token` works for Threads calls.
+- WhatsApp (`whatsapp.ts`) has no public feed concept, so "posting" is a broadcast
+  message to the business's existing opt-in customer list via the Cloud API; insights
+  return zeros until a delivery/read status-webhook ingestion path is built.
+- Reddit (`reddit.ts`) posts to a single configured subreddit per business — this
+  assumes the business (or its agency account) already has posting permissions
+  there; community-specific posting rules aren't validated before submission.
+- Bluesky (`bluesky.ts`) authenticates via per-business app password
+  (`createSession`) rather than OAuth, since Bluesky's third-party OAuth flow was
+  still rolling out when this adapter was written — revisit once it's stable.
+- Mastodon (`mastodon.ts`) is federated, so each business's `mastodon_instance_url`
+  is used as the API base instead of a single shared host.
+- WeChat (`wechat.ts`) targets the Official Account draft → freepublish flow, which
+  requires a verified service account in mainland China — confirm account tier
+  requirements once WeChat platform access is pursued.

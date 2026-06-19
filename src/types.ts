@@ -1,4 +1,4 @@
-export type Platform = "gbp" | "facebook" | "instagram" | "pinterest" | "twitter" | "linkedin" | "threads" | "yelp" | "nextdoor" | "snapchat" | "tiktok" | "youtube";
+export type Platform = "gbp" | "facebook" | "instagram" | "pinterest" | "twitter" | "linkedin" | "threads" | "yelp" | "nextdoor" | "snapchat" | "tiktok" | "youtube" | "whatsapp" | "reddit" | "bluesky" | "mastodon" | "tumblr" | "wechat";
 export type AdPlatform = "meta" | "google";
 export type MediaType = "image" | "video";
 
@@ -37,6 +37,18 @@ export interface Business {
   tiktok_access_token: string | null;
   youtube_channel_id: string | null;
   youtube_refresh_token: string | null;
+  whatsapp_phone_number_id: string | null;
+  whatsapp_access_token: string | null;
+  reddit_subreddit: string | null;
+  reddit_access_token: string | null;
+  bluesky_handle: string | null;
+  bluesky_app_password: string | null;
+  mastodon_instance_url: string | null;
+  mastodon_access_token: string | null;
+  tumblr_blog_name: string | null;
+  tumblr_access_token: string | null;
+  wechat_official_account_id: string | null;
+  wechat_access_token: string | null;
 }
 
 export type ContentStatus = "queued" | "approved" | "posted" | "rejected" | "edited";

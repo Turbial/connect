@@ -17,6 +17,12 @@ const PLATFORM_BRIEF: Record<Platform, string> = {
   snapchat: "a very short, casual caption (under 80 characters) to accompany a Snapchat Spotlight/Story image, fun and informal tone.",
   tiktok: "a short, energetic caption (under 150 characters) for a TikTok video, hook-driven, with 2-4 trending-style hashtags.",
   youtube: "a short, descriptive caption/title (under 100 characters) for a YouTube Short, clear about what the viewer will see, no clickbait.",
+  whatsapp: "a short, direct broadcast-style update (under 200 characters) for a WhatsApp Business customer list, friendly and personal, no hashtags.",
+  reddit: "a short, genuine post title plus body (under 500 characters total) for a relevant subreddit, written like a real community member sharing something useful, not an ad — Reddit users are highly sensitive to overt marketing.",
+  bluesky: "a short, casual post (under 300 characters) for Bluesky, conversational and direct, similar in tone to X but without the hashtag-heavy style.",
+  mastodon: "a short, conversational post (under 500 characters) for Mastodon, written for a niche, community-minded audience, with 1-2 relevant hashtags.",
+  tumblr: "a short, expressive post (under 250 characters) for Tumblr, casual and a little playful, 3-5 relevant tags at the end.",
+  wechat: "a short business update (under 200 characters) for a WeChat Official Account post, factual and respectful in tone, no hashtags.",
 };
 
 /** Platforms that require a video asset rather than a static image. */

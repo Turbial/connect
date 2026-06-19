@@ -144,3 +144,20 @@ alter table business add column if not exists tiktok_user_id text;
 alter table business add column if not exists tiktok_access_token text;
 alter table business add column if not exists youtube_channel_id text;
 alter table business add column if not exists youtube_refresh_token text;
+
+-- ── Phase 8: WhatsApp, Reddit, Bluesky, Mastodon, Tumblr, WeChat ────────────
+-- Triples organic platform coverage from the Phase 6 baseline, bringing
+-- total organic platform coverage to 18.
+
+alter table business add column if not exists whatsapp_phone_number_id text;
+alter table business add column if not exists whatsapp_access_token text;
+alter table business add column if not exists reddit_subreddit text;
+alter table business add column if not exists reddit_access_token text;
+alter table business add column if not exists bluesky_handle text;
+alter table business add column if not exists bluesky_app_password text;
+alter table business add column if not exists mastodon_instance_url text;
+alter table business add column if not exists mastodon_access_token text;
+alter table business add column if not exists tumblr_blog_name text;
+alter table business add column if not exists tumblr_access_token text;
+alter table business add column if not exists wechat_official_account_id text;
+alter table business add column if not exists wechat_access_token text;

@@ -10,6 +10,12 @@ import { fetchNextdoorInsights } from "../distribution/nextdoor.js";
 import { fetchSnapchatInsights } from "../distribution/snapchat.js";
 import { fetchTiktokInsights } from "../distribution/tiktok.js";
 import { fetchYoutubeInsights } from "../distribution/youtube.js";
+import { fetchWhatsappInsights } from "../distribution/whatsapp.js";
+import { fetchRedditInsights } from "../distribution/reddit.js";
+import { fetchBlueskyInsights } from "../distribution/bluesky.js";
+import { fetchMastodonInsights } from "../distribution/mastodon.js";
+import { fetchTumblrInsights } from "../distribution/tumblr.js";
+import { fetchWechatInsights } from "../distribution/wechat.js";
 import type { Business, Post } from "../types.js";
 
 async function fetchInsight(business: Business, post: Post, platformPostId: string) {
@@ -23,7 +29,13 @@ async function fetchInsight(business: Business, post: Post, platformPostId: stri
   if (post.platform === "nextdoor") return fetchNextdoorInsights(business, platformPostId);
   if (post.platform === "snapchat") return fetchSnapchatInsights(business, platformPostId);
   if (post.platform === "tiktok") return fetchTiktokInsights(business, platformPostId);
-  return fetchYoutubeInsights(business, platformPostId);
+  if (post.platform === "youtube") return fetchYoutubeInsights(business, platformPostId);
+  if (post.platform === "whatsapp") return fetchWhatsappInsights(business, platformPostId);
+  if (post.platform === "reddit") return fetchRedditInsights(business, platformPostId);
+  if (post.platform === "bluesky") return fetchBlueskyInsights(business, platformPostId);
+  if (post.platform === "mastodon") return fetchMastodonInsights(business, platformPostId);
+  if (post.platform === "tumblr") return fetchTumblrInsights(business, platformPostId);
+  return fetchWechatInsights(business, platformPostId);
 }
 
 /** Polls per-platform insights for a business's posted items and updates stored metrics. */
