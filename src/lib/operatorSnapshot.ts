@@ -1,5 +1,5 @@
 import { supabase } from "./supabase.js";
-import { getLatestVisibilityScore } from "../visibility-score/index.js";
+import { getLatestVisibilityScore, getVerticalBenchmark } from "../visibility-score/index.js";
 import { getConnectionSummary } from "./platformConnection.js";
 import { getRecentAgentActions } from "./agentAction.js";
 import { getPendingBoostTriggers } from "../approval/boost.js";
@@ -27,6 +27,10 @@ export interface OperatorSnapshot {
   pendingBoosts: BoostTrigger[];
   unresolvedReviews: UnresolvedReviewSummary[];
   recentActions: Awaited<ReturnType<typeof getRecentAgentActions>>;
+  /** Phase 9.4: a vertical peer-median, explicitly labeled as an early signal
+   * rather than a finished competitive benchmark — null below the minimum
+   * peer sample size (see MIN_BENCHMARK_SAMPLE), never a number from 1-2 peers. */
+  early_benchmark_signal: Awaited<ReturnType<typeof getVerticalBenchmark>>;
 }
 
 /** Negative reviews are the ones an owner actually needs to act on — there's
@@ -71,6 +75,7 @@ export async function buildOperatorSnapshot(businessId: string): Promise<Operato
   ]);
 
   const pendingApprovals = await getPendingApprovals(businessId);
+  const early_benchmark_signal = await getVerticalBenchmark(businessRow.vertical ?? "general", businessId);
 
   const { data: reviews, error: reviewsError } = await supabase
     .from("review")
@@ -96,5 +101,6 @@ export async function buildOperatorSnapshot(businessId: string): Promise<Operato
     pendingBoosts,
     unresolvedReviews,
     recentActions,
+    early_benchmark_signal,
   };
 }

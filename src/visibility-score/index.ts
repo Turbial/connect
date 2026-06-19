@@ -82,6 +82,49 @@ export async function getRankedOrgVisibilityRollup(organizationId: string): Prom
   return rankOrgLocations(rollup);
 }
 
+export interface VerticalBenchmark {
+  medianScore: number;
+  sampleSize: number;
+}
+
+/** Phase 9.4: a vertical benchmark is only ever an "early signal," never a
+ * finished competitive-intelligence number — this threshold is enforced
+ * here, in the pure computation itself, so no caller can accidentally show
+ * a misleadingly precise benchmark from a tiny peer sample. */
+export const MIN_BENCHMARK_SAMPLE = 5;
+
+/** Phase 9.4: pure median-based benchmark over a vertical's other scored
+ * businesses (doc §22/§26's "call it what it is, not a flywheel" framing).
+ * Median, not average, so a single outlier business can't drag a small
+ * sample. Returns null below MIN_BENCHMARK_SAMPLE rather than a number. */
+export function computeVerticalBenchmark(scores: number[]): VerticalBenchmark | null {
+  if (scores.length < MIN_BENCHMARK_SAMPLE) return null;
+
+  const sorted = [...scores].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const medianScore = sorted.length % 2 === 0 ? Math.round((sorted[mid - 1] + sorted[mid]) / 2) : sorted[mid];
+
+  return { medianScore, sampleSize: sorted.length };
+}
+
+/** Fetches every other scored business sharing `vertical` and computes the
+ * median-benchmark over their latest scores, excluding `excludingBusinessId`
+ * itself. */
+export async function getVerticalBenchmark(vertical: Vertical, excludingBusinessId: string): Promise<VerticalBenchmark | null> {
+  const { data: businesses, error } = await supabase
+    .from("business")
+    .select("id")
+    .eq("vertical", vertical)
+    .neq("id", excludingBusinessId);
+  if (error) throw error;
+
+  const scores = await Promise.all(
+    ((businesses ?? []) as { id: string }[]).map(async (b) => (await getLatestVisibilityScore(b.id))?.score ?? null)
+  );
+
+  return computeVerticalBenchmark(scores.filter((s): s is number => s !== null));
+}
+
 /**
  * Phase 3.2: aggregates the most recent signal from each of the 18 audit/
  * service-module rows into one 0-100 score with a category breakdown.
