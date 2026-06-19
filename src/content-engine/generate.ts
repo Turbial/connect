@@ -70,6 +70,13 @@ function sentimentTone(reviewRating?: number | null): string | null {
   return "matter-of-fact and measured";
 }
 
+/** Thin exported wrapper around the DeepSeek call below, for callers outside
+ * the Content Engine that need a single free-form completion (e.g. Phase
+ * 3.3's EDIT auto-rewrite) without duplicating the request/response plumbing. */
+export async function callDeepSeekPrompt(prompt: string): Promise<string | null> {
+  return callDeepSeek(prompt);
+}
+
 async function callDeepSeek(prompt: string): Promise<string | null> {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) return null;

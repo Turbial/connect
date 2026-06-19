@@ -510,3 +510,52 @@ alter table business add column if not exists boost_budget_cents integer;
 alter table business add column if not exists approval_timeout_hours integer;
 alter table business add column if not exists posting_cadence text not null default 'weekly';
 alter table business add column if not exists brand_voice_banned_words text[] not null default array[]::text[];
+
+-- ── Development Program Phase 3: ROI & Agent Operations ────────────────────
+
+-- 3.1: canonical business website link, UTM-tagged via src/lib/utm.ts wherever
+-- a destination URL is embedded in generated content (currently ad creative;
+-- see src/ads/creative.ts). Nullable since not every business has a site yet.
+alter table business add column if not exists website_url text;
+
+-- 3.1: generic lead/booking/revenue attribution event, additive alongside the
+-- existing post.calls GBP-level call attribution. This is the ingestion point
+-- a future CRM/Stripe webhook handler would call via src/lib/leadEvents.ts —
+-- no such webhook exists yet, so source/external_ref stay generic rather than
+-- modeling a specific provider's payload shape.
+create table if not exists lead_event (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  content_item_id uuid references content_item(id) on delete set null,
+  post_id uuid references post(id) on delete set null,
+  platform text,
+  source text not null, -- call | form | crm | booking | stripe
+  external_ref text,
+  amount_cents integer,
+  occurred_at timestamptz not null default now()
+);
+
+create index if not exists idx_lead_event_business on lead_event(business_id);
+create index if not exists idx_lead_event_content_item on lead_event(content_item_id);
+create index if not exists idx_lead_event_post on lead_event(post_id);
+
+-- 3.2: Local Visibility Score v1 — persisted aggregate of the 18 audit/
+-- service-module signals into one 0-100 score, with a category breakdown and
+-- concrete recommended actions, computed by src/visibility-score/index.ts.
+create table if not exists visibility_score (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  score integer not null,
+  category_breakdown jsonb not null default '{}'::jsonb,
+  recommendations jsonb not null default '[]'::jsonb,
+  computed_at timestamptz not null default now()
+);
+
+create index if not exists idx_visibility_score_business on visibility_score(business_id);
+
+-- 3.3: EDIT auto-rewrite — the agent-drafted rewrite proposed to the owner,
+-- pending their second YES/NO. Stored on approval_request (the row already
+-- tracking the EDIT reply) rather than content_item, since the rewrite isn't
+-- live until the owner approves it — content_item.caption is only overwritten
+-- on that second YES (see src/approval/index.ts draftEditRewrite/applyEditRewrite).
+alter table approval_request add column if not exists proposed_rewrite text;

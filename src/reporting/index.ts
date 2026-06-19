@@ -3,7 +3,8 @@ import { sendApprovalEmail } from "../approval/email.js";
 import { sendApprovalSms } from "../approval/sms.js";
 import { isLivePlatform } from "../lib/platformStatus.js";
 import { getConnectionSummary } from "../lib/platformConnection.js";
-import type { Business, Post } from "../types.js";
+import { getLeadEventsForBusiness } from "../lib/leadEvents.js";
+import type { Business, DistributionFailure, Post } from "../types.js";
 
 function formatWeekOf(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "long", day: "numeric" });
@@ -52,13 +53,29 @@ export async function buildWeeklyReport(business: Business): Promise<string> {
 
   const { data: failures, error: failuresError } = await supabase
     .from("distribution_failure")
-    .select("id")
+    .select("*")
     .eq("business_id", business.id)
     .gte("occurred_at", weekAgo);
   if (failuresError) throw failuresError;
 
   const connectionSummary = await getConnectionSummary(business.id);
   const needsReconnection = connectionSummary.filter((c) => c.actionRequired);
+
+  // Phase 3.3: a recurring failure on the same platform (3+ in the window) is
+  // a distinct, more actionable signal than the generic failed-post count —
+  // it points at one broken connection, not scattered one-off errors.
+  const failuresByPlatform = new Map<string, number>();
+  for (const f of (failures ?? []) as DistributionFailure[]) {
+    failuresByPlatform.set(f.platform, (failuresByPlatform.get(f.platform) ?? 0) + 1);
+  }
+  const recurringFailurePlatforms = [...failuresByPlatform.entries()].filter(([, count]) => count >= 3);
+
+  // Phase 3.1: lead/revenue attribution from lead_event, additive to the GBP
+  // post.calls figure above. Only shown when there's at least one event in
+  // the window so reports don't show a fake $0 line for businesses with no
+  // attribution data wired up yet.
+  const leadEvents = await getLeadEventsForBusiness(business.id, weekAgo);
+  const attributedRevenueCents = leadEvents.reduce((sum, e) => sum + (e.amount_cents ?? 0), 0);
 
   const lines = [
     `Your MightyMax Update — Week of ${formatWeekOf(new Date())}`,
@@ -75,8 +92,17 @@ export async function buildWeeklyReport(business: Business): Promise<string> {
     );
   }
 
+  for (const [platform, count] of recurringFailurePlatforms) {
+    lines.push(`⚠️ Repeated failures on ${platform} (${count}x this week) — check your connection.`);
+  }
+
   if ((boosts ?? []).length > 0) {
     lines.push(`🚀 ${boosts!.length} post${boosts!.length === 1 ? "" : "s"} turned into paid ads this week`);
+  }
+
+  if (leadEvents.length > 0) {
+    const revenueLine = attributedRevenueCents > 0 ? `$${(attributedRevenueCents / 100).toFixed(2)} attributed revenue, ` : "";
+    lines.push(`💰 ${revenueLine}${leadEvents.length} lead${leadEvents.length === 1 ? "" : "s"} this week`);
   }
 
   return lines.join("\n");

@@ -37,6 +37,13 @@ async function getAccessToken(business: Business): Promise<string> {
   return data.access_token;
 }
 
+/**
+ * Note (Phase 3.1): creative.destinationUrl carries the UTM-tagged link, but
+ * this function only creates the campaign/budget objects, not an ad group/ad
+ * (the final-URL field lives on the Ad object) — wiring it through requires
+ * confirming the ad-group/responsive-search-ad object chain against a live
+ * Google Ads account, same caveat as the rest of this adapter.
+ */
 export async function launchGoogleCampaign(business: Business, creative: AdCreative, budgetCents: number): Promise<AdLaunchResult> {
   const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
   if (!developerToken || !business.google_ads_customer_id) {

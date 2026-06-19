@@ -7,6 +7,12 @@ import type { Business, BoostTrigger, Post } from "../types.js";
 /** Default boost spend until businesses can configure their own budget. */
 const DEFAULT_BUDGET_CENTS = 2000;
 
+/** Phase 3.3 guardrailed activation: an owner-specified budget in a BOOST
+ * YES reply (e.g. "BOOST YES $50") is clamped to at most 5x the business's
+ * configured/default budget, so a typo (e.g. an extra zero) can't authorize
+ * an absurd spend without a second confirmation step. */
+const MAX_BUDGET_MULTIPLIER = 5;
+
 /** True if the business has at least one boost_trigger awaiting an owner reply. */
 export async function hasPendingBoost(businessId: string): Promise<boolean> {
   const { data: posts, error } = await supabase
@@ -28,16 +34,35 @@ export async function hasPendingBoost(businessId: string): Promise<boolean> {
   return (pending ?? []).length > 0;
 }
 
-function parseBoostReply(body: string): "yes" | "no" | "unknown" {
+interface BoostReply {
+  decision: "yes" | "no" | "unknown";
+  /** Owner-specified budget in cents, parsed from a trailing dollar amount
+   * (e.g. "BOOST YES $50"). Null when no amount was given — callers fall
+   * back to the business/default budget in that case. */
+  budgetCents: number | null;
+}
+
+function parseBoostReply(body: string): BoostReply {
   const normalized = body.trim().toLowerCase().replace(/^boost\s*/, "");
-  if (normalized === "yes" || normalized === "y") return "yes";
-  if (normalized === "no" || normalized === "n") return "no";
-  return "unknown";
+  const amountMatch = normalized.match(/\$?(\d+(?:\.\d{1,2})?)/);
+  const budgetCents = amountMatch ? Math.round(parseFloat(amountMatch[1]) * 100) : null;
+
+  if (normalized.startsWith("yes") || normalized.startsWith("y")) return { decision: "yes", budgetCents };
+  if (normalized.startsWith("no") || normalized.startsWith("n")) return { decision: "no", budgetCents: null };
+  return { decision: "unknown", budgetCents: null };
+}
+
+/** Clamps an owner-specified budget to a sane ceiling relative to the
+ * business's configured/default budget, so a typo can't authorize an
+ * absurd spend (Phase 3.3 guardrailed activation). */
+function clampBudget(requestedCents: number, ceilingBaseCents: number): number {
+  const maxCents = ceilingBaseCents * MAX_BUDGET_MULTIPLIER;
+  return Math.min(requestedCents, maxCents);
 }
 
 /** Handles an inbound BOOST YES/NO reply: launches the ad on approval, marks declined otherwise. */
 export async function handleBoostReply(business: Business, body: string): Promise<void> {
-  const decision = parseBoostReply(body);
+  const { decision, budgetCents: requestedBudgetCents } = parseBoostReply(body);
   if (decision === "unknown") return;
 
   const { data: posts, error: postsError } = await supabase
@@ -76,7 +101,8 @@ export async function handleBoostReply(business: Business, body: string): Promis
   const post = (posts ?? []).find((p) => p.id === trigger.post_id);
   const caption = post?.content_item?.caption ?? "";
 
-  const budgetCents = business.boost_budget_cents ?? DEFAULT_BUDGET_CENTS;
+  const defaultBudgetCents = business.boost_budget_cents ?? DEFAULT_BUDGET_CENTS;
+  const budgetCents = requestedBudgetCents ? clampBudget(requestedBudgetCents, defaultBudgetCents) : defaultBudgetCents;
   const creative = await generateAdCreative(business, caption);
   const result =
     trigger.ad_platform === "google"

@@ -58,7 +58,12 @@ export async function launchMetaCampaign(business: Business, creative: AdCreativ
     name: `${business.name} boost creative`,
     object_story_spec: JSON.stringify({
       page_id: business.fb_page_id,
-      link_data: { message: creative.copyVariants[0], picture: creative.imageUrls[0] },
+      link_data: {
+        message: creative.copyVariants[0],
+        picture: creative.imageUrls[0],
+        // Phase 3.1: UTM-tagged link so clicks on this ad attribute back to the boost campaign.
+        ...(creative.destinationUrl ? { link: creative.destinationUrl } : {}),
+      },
     }),
   });
 

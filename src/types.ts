@@ -236,6 +236,7 @@ export interface Business {
   approval_timeout_hours: number | null;
   posting_cadence: string | null;
   brand_voice_banned_words: string[] | null;
+  website_url: string | null;
 }
 
 export interface PlatformConnection {
@@ -282,6 +283,7 @@ export interface ApprovalRequest {
   response: string | null;
   responded_at: string | null;
   timeout_action: "auto_post" | "hold";
+  proposed_rewrite: string | null;
 }
 
 export interface Post {
@@ -334,6 +336,9 @@ export interface AdCreative {
   copyVariants: string[];
   imagePrompts: string[];
   imageUrls: string[];
+  /** Phase 3.1: UTM-tagged destination link for outcome attribution, null
+   * when the business has no website_url configured. */
+  destinationUrl: string | null;
 }
 
 export interface Competitor {
@@ -413,4 +418,32 @@ export interface DistributionFailure {
   platform: Platform;
   error: string;
   occurred_at: string;
+}
+
+/** Phase 3.1: generic non-GBP lead/booking/revenue attribution event. The GBP
+ * post.calls field already tracks call attribution at the post level — this
+ * is additive, for richer attribution (CRM/forms/bookings/revenue) keyed back
+ * to the originating content item/post where attributable. */
+export interface LeadEvent {
+  id: string;
+  business_id: string;
+  content_item_id: string | null;
+  post_id: string | null;
+  platform: Platform | null;
+  source: "call" | "form" | "crm" | "booking" | "stripe";
+  external_ref: string | null;
+  amount_cents: number | null;
+  occurred_at: string;
+}
+
+/** Phase 3.2: a single 0-100 customer-facing visibility score aggregating the
+ * 18 audit/service-module signals into one number with a category breakdown
+ * and concrete recommended actions for any category below threshold. */
+export interface VisibilityScore {
+  id: string;
+  business_id: string;
+  score: number;
+  categoryBreakdown: Record<string, number>;
+  recommendations: string[];
+  computed_at: string;
 }

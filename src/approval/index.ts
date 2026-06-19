@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase.js";
 import { sendApprovalSms, parseReply } from "./sms.js";
 import { sendApprovalEmail } from "./email.js";
+import { callDeepSeekPrompt } from "../content-engine/generate.js";
 import type { Business, ContentItem } from "../types.js";
 
 function buildMessage(business: Business, items: ContentItem[]): string {
@@ -93,6 +94,100 @@ export async function getEditQueue(): Promise<EditQueueItem[]> {
     });
   }
   return queue;
+}
+
+/**
+ * Phase 3.3: drafts a revised caption from the original caption + the
+ * owner's requested change text, reusing the Content Engine's DeepSeek call
+ * rather than a separate LLM integration. Returns null if no DEEPSEEK_API_KEY
+ * is configured, matching the existing fallback pattern in generate.ts where
+ * missing API keys degrade gracefully instead of throwing.
+ */
+export async function draftEditRewrite(item: EditQueueItem): Promise<string | null> {
+  if (!item.requestedChange) return null;
+
+  return callDeepSeekPrompt(
+    `Here is a social media caption: "${item.caption}". The business owner replied with this requested change: "${item.requestedChange}". Rewrite the caption to incorporate the owner's requested change, keeping the same overall tone and length. Respond with only the rewritten caption, no explanation.`
+  );
+}
+
+/**
+ * Sends a drafted rewrite back to the owner for a second YES/NO and stores
+ * it on the most recent approval_request row for that content item (rather
+ * than overwriting content_item.caption directly) — the rewrite only
+ * becomes live once the owner approves it via handleEditRewriteReply below,
+ * so it can't silently replace the caption on a flaky/ambiguous EDIT reply.
+ */
+export async function proposeEditRewrite(business: Business, item: EditQueueItem, rewrite: string): Promise<void> {
+  const message = [
+    `Here's a revised version for ${business.name}: "${rewrite}"`,
+    "Reply YES to use this version, or NO to leave it as-is.",
+  ].join(" ");
+
+  if (business.owner_phone) {
+    await sendApprovalSms(business.owner_phone, message);
+  } else if (business.owner_email) {
+    await sendApprovalEmail(business.owner_email, "Revised post ready for review", message);
+  } else {
+    return;
+  }
+
+  const { data: latestRequest, error: lookupError } = await supabase
+    .from("approval_request")
+    .select("id")
+    .eq("content_item_id", item.contentItemId)
+    .order("sent_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+  if (!latestRequest) return;
+
+  const { error } = await supabase.from("approval_request").update({ proposed_rewrite: rewrite }).eq("id", latestRequest.id);
+  if (error) throw error;
+}
+
+/**
+ * Handles the owner's second YES/NO reply to a proposed rewrite: YES
+ * overwrites content_item.caption with the proposed_rewrite and re-queues it
+ * for approval/posting; NO leaves the original caption in place. Looks up
+ * the most recent approval_request with a proposed_rewrite still pending a
+ * decision for this business's edited content items.
+ */
+export async function handleEditRewriteReply(businessId: string, body: string): Promise<boolean> {
+  const decision = parseReply(body);
+  if (decision !== "approve" && decision !== "reject") return false;
+
+  const { data: editedItems, error: itemsError } = await supabase
+    .from("content_item")
+    .select("id")
+    .eq("business_id", businessId)
+    .eq("status", "edited");
+  if (itemsError) throw itemsError;
+  const editedItemIds = (editedItems ?? []).map((i) => i.id);
+  if (editedItemIds.length === 0) return false;
+
+  const { data: pending, error: pendingError } = await supabase
+    .from("approval_request")
+    .select("*")
+    .in("content_item_id", editedItemIds)
+    .not("proposed_rewrite", "is", null)
+    .order("sent_at", { ascending: false })
+    .limit(1);
+  if (pendingError) throw pendingError;
+
+  const request = (pending ?? [])[0];
+  if (!request) return false;
+
+  if (decision === "approve") {
+    const { error } = await supabase
+      .from("content_item")
+      .update({ caption: request.proposed_rewrite, status: "queued" })
+      .eq("id", request.content_item_id);
+    if (error) throw error;
+  }
+
+  await supabase.from("approval_request").update({ proposed_rewrite: null }).eq("id", request.id);
+  return true;
 }
 
 /** Applies each request's configured timeout action to requests that never got a reply.

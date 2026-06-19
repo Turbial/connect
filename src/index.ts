@@ -1,10 +1,11 @@
 import "dotenv/config";
 import http from "node:http";
 import { supabase } from "./lib/supabase.js";
-import { handleSmsReply } from "./approval/index.js";
+import { handleSmsReply, handleEditRewriteReply } from "./approval/index.js";
 import { hasPendingBoost, handleBoostReply } from "./approval/boost.js";
 import { handleReachReview } from "./reach-integration/index.js";
 import { getConnectionSummary } from "./lib/platformConnection.js";
+import { getLatestVisibilityScore } from "./visibility-score/index.js";
 import type { Business } from "./types.js";
 
 async function handleSmsWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -35,6 +36,8 @@ async function handleSmsWebhook(req: http.IncomingMessage, res: http.ServerRespo
   const normalized = text.trim().toLowerCase();
   if (normalized.startsWith("boost") || (await hasPendingBoost(business.id))) {
     await handleBoostReply(business as Business, text);
+  } else if (await handleEditRewriteReply(business.id, text)) {
+    // A pending EDIT-rewrite proposal took priority and was resolved by this reply.
   } else {
     await handleSmsReply(business.id, text);
   }
@@ -68,6 +71,15 @@ async function handleConnectionsRoute(req: http.IncomingMessage, res: http.Serve
   res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(summary));
 }
 
+async function handleVisibilityScoreRoute(req: http.IncomingMessage, res: http.ServerResponse, businessId: string) {
+  const score = await getLatestVisibilityScore(businessId);
+  if (!score) {
+    res.writeHead(404).end();
+    return;
+  }
+  res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(score));
+}
+
 /** Webhook receiver for inbound Twilio SMS replies and Reach review events. */
 const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/webhooks/sms") {
@@ -81,6 +93,11 @@ const server = http.createServer(async (req, res) => {
   const connectionsMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/connections$/);
   if (connectionsMatch) {
     await handleConnectionsRoute(req, res, connectionsMatch[1]);
+    return;
+  }
+  const visibilityScoreMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/visibility-score$/);
+  if (visibilityScoreMatch) {
+    await handleVisibilityScoreRoute(req, res, visibilityScoreMatch[1]);
     return;
   }
   res.writeHead(404).end();

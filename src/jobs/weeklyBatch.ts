@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { supabase } from "../lib/supabase.js";
 import { queueWeeklyContent } from "../content-engine/index.js";
-import { requestApproval, applyTimeouts, getEditQueue } from "../approval/index.js";
+import { requestApproval, applyTimeouts, getEditQueue, draftEditRewrite, proposeEditRewrite } from "../approval/index.js";
 import { postApprovedContent } from "../distribution/index.js";
 import { sendWeeklyReport } from "../reporting/index.js";
 import type { Business, ContentItem } from "../types.js";
@@ -38,10 +38,20 @@ async function main(): Promise<void> {
   }
 
   // Surface pending EDIT requests so they're a visible queue, not a silent
-  // dead end in the database.
+  // dead end in the database. Phase 3.3: in addition to logging, draft an
+  // agent rewrite per item and send it back to the owner for a YES/NO.
   const editQueue = await getEditQueue();
   if (editQueue.length > 0) {
     console.log(`${editQueue.length} content item(s) awaiting EDIT resolution:`, editQueue);
+
+    const businessById = new Map((businesses ?? []).map((b) => [b.id, b as Business]));
+    for (const item of editQueue) {
+      const rewrite = await draftEditRewrite(item);
+      const business = businessById.get(item.businessId);
+      if (rewrite && business) {
+        await proposeEditRewrite(business, item, rewrite);
+      }
+    }
   }
 }
 

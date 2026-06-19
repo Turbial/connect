@@ -1,3 +1,4 @@
+import { buildUtmLink } from "../lib/utm.js";
 import type { AdCreative, Business } from "../types.js";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
@@ -55,10 +56,27 @@ async function generateAdImage(prompt: string): Promise<string | null> {
   return data.images?.[0]?.url ?? null;
 }
 
+/** Phase 3.1: UTM-tagged destination link for the ad, so attributed
+ * clicks/leads can be traced back to this specific boost campaign. Ads
+ * already need a destination URL, and there's no other canonical "link
+ * embedded in generated content" point yet (captions don't carry a link
+ * today), so this is where buildUtmLink() is wired in first. Null when the
+ * business hasn't set a website_url. */
+function buildAdDestinationLink(business: Business): string | null {
+  if (!business.website_url) return null;
+  return buildUtmLink(business.website_url, {
+    source: business.meta_ads_account_id ? "meta" : "google",
+    medium: "paid_social",
+    campaign: "boost",
+    content: business.id,
+  });
+}
+
 export async function generateAdCreative(business: Business, sourceCaption: string, variantCount = 3): Promise<AdCreative> {
   const copyVariants = await generateCopyVariants(business, sourceCaption, variantCount);
   const imagePrompts = copyVariants.map((v) => `Photo-realistic ad image for ${business.name}: ${v}`);
   const imageUrls = (await Promise.all(imagePrompts.map(generateAdImage))).filter((url): url is string => url !== null);
+  const destinationUrl = buildAdDestinationLink(business);
 
-  return { copyVariants, imagePrompts, imageUrls };
+  return { copyVariants, imagePrompts, imageUrls, destinationUrl };
 }
