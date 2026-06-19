@@ -1,10 +1,11 @@
 # Connect — MightyMax Distribution Layer
 
-The MightyMax Visibility Engine's Distribution Layer: organic posting (GBP, Facebook,
-Instagram, Pinterest, X, LinkedIn) with SMS/email owner approval, an organic → paid
-boost trigger with real Meta/Google Ads campaign launch, and a review → content
-feedback loop fed by Reach. Built standalone — integration with MotionBlue, TurboAd,
-and Reach is isolated behind clear module boundaries below.
+The MightyMax Visibility Engine's Distribution Layer: organic posting across 10
+platforms (GBP, Facebook, Instagram, Pinterest, X, LinkedIn, Threads, Yelp, Nextdoor,
+Snapchat) with SMS/email owner approval, an organic → paid boost trigger with real
+Meta/Google Ads campaign launch, and a review → content feedback loop fed by Reach.
+Built standalone — integration with MotionBlue, TurboAd, and Reach is isolated behind
+clear module boundaries below.
 
 ## Services
 
@@ -12,7 +13,7 @@ and Reach is isolated behind clear module boundaries below.
 |---|---|
 | `src/content-engine` | Generates platform-tailored post copy + images (DeepSeek + fal.ai). `connectedPlatforms()` determines which platforms a business posts to; `queueWeeklyContent` and `queueReviewTriggeredContent` (Phase 4) both fan out per-platform. |
 | `src/approval` | Sends SMS (Twilio) or email and parses content YES/NO/EDIT replies (`index.ts`/`sms.ts`/`email.ts`) and boost BOOST YES/NO replies (`boost.ts`). |
-| `src/distribution` | Posts approved content to GBP, Facebook Pages, Instagram, Pinterest, X, and LinkedIn. Each platform's API calls are isolated behind its own adapter (`gbp.ts`, `meta.ts`, `pinterest.ts`, `twitter.ts`, `linkedin.ts`); `index.ts` dispatches per item per platform. |
+| `src/distribution` | Posts approved content across all 10 connected platforms. Each platform's API calls are isolated behind its own adapter (`gbp.ts`, `meta.ts`, `pinterest.ts`, `twitter.ts`, `linkedin.ts`, `threads.ts`, `yelp.ts`, `nextdoor.ts`, `snapchat.ts`); `index.ts` dispatches per item per platform. |
 | `src/performance` | Polls each connected platform's insights/analytics API for posted items. |
 | `src/trigger-engine` | Evaluates posted content against a views/engagement threshold and prompts the owner to approve a paid boost (Phase 3). |
 | `src/ads` | `creative.ts` generates ad copy/images from a high-performing organic post (TurboAd exposes no callable API, so this reimplements its DeepSeek/fal.ai pattern directly). `metaAds.ts`/`googleAds.ts` launch real, paused campaigns via the Meta Marketing API and Google Ads API. |
@@ -24,7 +25,8 @@ and Reach is isolated behind clear module boundaries below.
 
 ## Setup
 1. Copy `.env.example` to `.env` and fill in Supabase, Twilio, DeepSeek, fal.ai, Meta,
-   Google Ads, Pinterest/X/LinkedIn, and Reach email webhook credentials.
+   Google Ads, Pinterest/X/LinkedIn, Threads/Yelp/Nextdoor/Snapchat, and Reach email
+   webhook credentials.
 2. Run `db/schema.sql` against your Supabase project.
 3. `npm install`
 4. `npm run weekly` to run the weekly batch job manually, or wire it to a scheduler.
@@ -52,3 +54,9 @@ and Reach is isolated behind clear module boundaries below.
 - LinkedIn's `postToLinkedin` reads the created post's URN from the `x-restli-id`
   response header per the documented UGC Posts API behavior — confirm against a live
   org page once LinkedIn API access is granted.
+- Yelp and Nextdoor adapters (`yelp.ts`, `nextdoor.ts`) target their respective
+  partner-program "business updates"/"business posts" surfaces, which aren't fully
+  public — confirm exact endpoints/auth once partner access is granted for each.
+- Threads (`threads.ts`) uses a Threads-scoped access token, issued separately from
+  the Instagram Graph token even though both are Meta products — don't assume
+  `fb_page_access_token` works for Threads calls.

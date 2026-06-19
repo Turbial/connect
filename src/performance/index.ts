@@ -4,6 +4,10 @@ import { fetchMetaInsights } from "../distribution/meta.js";
 import { fetchPinterestInsights } from "../distribution/pinterest.js";
 import { fetchTwitterInsights } from "../distribution/twitter.js";
 import { fetchLinkedinInsights } from "../distribution/linkedin.js";
+import { fetchThreadsInsights } from "../distribution/threads.js";
+import { fetchYelpInsights } from "../distribution/yelp.js";
+import { fetchNextdoorInsights } from "../distribution/nextdoor.js";
+import { fetchSnapchatInsights } from "../distribution/snapchat.js";
 import type { Business, Post } from "../types.js";
 
 async function fetchInsight(business: Business, post: Post, platformPostId: string) {
@@ -11,7 +15,11 @@ async function fetchInsight(business: Business, post: Post, platformPostId: stri
   if (post.platform === "facebook" || post.platform === "instagram") return fetchMetaInsights(business, platformPostId);
   if (post.platform === "pinterest") return fetchPinterestInsights(business, platformPostId);
   if (post.platform === "twitter") return fetchTwitterInsights(business, platformPostId);
-  return fetchLinkedinInsights(business, platformPostId);
+  if (post.platform === "linkedin") return fetchLinkedinInsights(business, platformPostId);
+  if (post.platform === "threads") return fetchThreadsInsights(business, platformPostId);
+  if (post.platform === "yelp") return fetchYelpInsights(business, platformPostId);
+  if (post.platform === "nextdoor") return fetchNextdoorInsights(business, platformPostId);
+  return fetchSnapchatInsights(business, platformPostId);
 }
 
 /** Polls per-platform insights for a business's posted items and updates stored metrics. */

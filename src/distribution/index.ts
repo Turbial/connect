@@ -4,6 +4,10 @@ import { postToFacebookPage, postToInstagram } from "./meta.js";
 import { postToPinterest } from "./pinterest.js";
 import { postToTwitter } from "./twitter.js";
 import { postToLinkedin } from "./linkedin.js";
+import { postToThreads } from "./threads.js";
+import { postToYelp } from "./yelp.js";
+import { postToNextdoor } from "./nextdoor.js";
+import { postToSnapchat } from "./snapchat.js";
 import type { Business, ContentItem, Platform } from "../types.js";
 
 async function postToPlatform(business: Business, item: ContentItem, platform: Platform) {
@@ -12,7 +16,11 @@ async function postToPlatform(business: Business, item: ContentItem, platform: P
   if (platform === "instagram") return postToInstagram(business, item);
   if (platform === "pinterest") return postToPinterest(business, item);
   if (platform === "twitter") return postToTwitter(business, item);
-  return postToLinkedin(business, item);
+  if (platform === "linkedin") return postToLinkedin(business, item);
+  if (platform === "threads") return postToThreads(business, item);
+  if (platform === "yelp") return postToYelp(business, item);
+  if (platform === "nextdoor") return postToNextdoor(business, item);
+  return postToSnapchat(business, item);
 }
 
 /** Posts every approved content item for a business to its target platforms. */

@@ -10,6 +10,10 @@ const PLATFORM_BRIEF: Record<Platform, string> = {
   pinterest: "a short, keyword-rich Pinterest pin description (under 500 characters) that reads like a helpful idea or inspiration, with 2-3 relevant hashtags.",
   twitter: "a short, punchy post for X (under 280 characters), conversational and direct, 1-2 hashtags at most.",
   linkedin: "a professional but approachable LinkedIn post (200-400 characters) framed around expertise, craftsmanship, or community impact, no hashtags needed.",
+  threads: "a short, casual, conversational post for Threads (under 280 characters), more personal and off-the-cuff than a polished ad.",
+  yelp: "a short business update (under 300 characters) for a Yelp business page, factual and helpful (hours, new offerings, announcements), no salesy language.",
+  nextdoor: "a short, neighborly post (under 300 characters) for Nextdoor framed as a local update or community contribution, not an ad — Nextdoor users are sensitive to overt marketing.",
+  snapchat: "a very short, casual caption (under 80 characters) to accompany a Snapchat Spotlight/Story image, fun and informal tone.",
 };
 
 async function generateCaption(business: Business, platform: Platform, context?: string): Promise<string> {

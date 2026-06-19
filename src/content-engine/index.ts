@@ -9,6 +9,10 @@ export function connectedPlatforms(business: Business): Platform[] {
   if (business.pinterest_board_id) platforms.push("pinterest");
   if (business.twitter_access_token) platforms.push("twitter");
   if (business.linkedin_organization_id) platforms.push("linkedin");
+  if (business.threads_user_id) platforms.push("threads");
+  if (business.yelp_business_id) platforms.push("yelp");
+  if (business.nextdoor_business_id) platforms.push("nextdoor");
+  if (business.snapchat_profile_id) platforms.push("snapchat");
   return platforms;
 }
 

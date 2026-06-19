@@ -1,4 +1,4 @@
-export type Platform = "gbp" | "facebook" | "instagram" | "pinterest" | "twitter" | "linkedin";
+export type Platform = "gbp" | "facebook" | "instagram" | "pinterest" | "twitter" | "linkedin" | "threads" | "yelp" | "nextdoor" | "snapchat";
 export type AdPlatform = "meta" | "google";
 
 export interface Business {
@@ -24,6 +24,14 @@ export interface Business {
   twitter_access_token: string | null;
   linkedin_organization_id: string | null;
   linkedin_access_token: string | null;
+  threads_user_id: string | null;
+  threads_access_token: string | null;
+  yelp_business_id: string | null;
+  yelp_access_token: string | null;
+  nextdoor_business_id: string | null;
+  nextdoor_access_token: string | null;
+  snapchat_profile_id: string | null;
+  snapchat_access_token: string | null;
 }
 
 export type ContentStatus = "queued" | "approved" | "posted" | "rejected" | "edited";

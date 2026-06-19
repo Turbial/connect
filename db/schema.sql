@@ -119,3 +119,17 @@ alter table business add column if not exists pinterest_access_token text;
 alter table business add column if not exists twitter_access_token text;
 alter table business add column if not exists linkedin_organization_id text;
 alter table business add column if not exists linkedin_access_token text;
+
+-- ── Phase 6: Threads, Yelp, Nextdoor, Snapchat connections ──────────────────
+-- Doubles organic platform coverage to 10. Still no video platforms (TikTok,
+-- YouTube) for the same reason as Phase 5: the Content Engine only generates
+-- static images today.
+
+alter table business add column if not exists threads_user_id text;
+alter table business add column if not exists threads_access_token text;
+alter table business add column if not exists yelp_business_id text;
+alter table business add column if not exists yelp_access_token text;
+alter table business add column if not exists nextdoor_business_id text;
+alter table business add column if not exists nextdoor_access_token text;
+alter table business add column if not exists snapchat_profile_id text;
+alter table business add column if not exists snapchat_access_token text;
