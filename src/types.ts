@@ -269,6 +269,10 @@ export interface Business {
   boost_allowed_platforms: Platform[] | null;
   boost_stop_loss_cents: number | null;
   boost_budget_reset_schedule: "daily" | "weekly" | null;
+  /** Phase 8.8: an external CRM/PM endpoint a lead_intent customer message
+   * gets POSTed to — Connect routes the signal, it does not store or manage
+   * the lead itself. Null (the default) means no forwarding happens. */
+  crm_webhook_url: string | null;
 }
 
 /** Phase 6.7: the entitlement tier a business/org is on. Starter and
@@ -619,6 +623,11 @@ export interface VisibilityScore {
  * ApprovalRequest (Connect-to-owner). customer_identifier is a phone number,
  * chat session id, or social handle depending on channel; body is null for
  * missed-call-only events. */
+/** Phase 8.8: the fixed, bounded set of intents an inbound customer message
+ * gets classified into — not open-ended, mirroring Phase 7.3's edit-reply
+ * categories. */
+export type MessageIntent = "lead_intent" | "question" | "complaint" | "other";
+
 export interface CustomerMessage {
   id: string;
   business_id: string;
@@ -626,6 +635,9 @@ export interface CustomerMessage {
   direction: "inbound" | "outbound";
   customer_identifier: string;
   body: string | null;
+  /** Phase 8.8: null for outbound messages and for any inbound message that
+   * wasn't classified (no body, or no DEEPSEEK_API_KEY configured). */
+  intent: MessageIntent | null;
   created_at: string;
 }
 

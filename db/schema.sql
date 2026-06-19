@@ -640,6 +640,11 @@ create table if not exists customer_message (
   created_at timestamptz not null default now()
 );
 
+-- 8.8: bounded intent classification for inbound customer messages
+-- (lead_intent | question | complaint | other) — null for outbound messages
+-- and anything that couldn't be classified.
+alter table customer_message add column if not exists intent text;
+
 create index if not exists idx_customer_message_business on customer_message(business_id, created_at);
 create index if not exists idx_customer_message_identifier on customer_message(business_id, customer_identifier);
 
@@ -728,3 +733,7 @@ alter table business add column if not exists boost_budget_reset_schedule text; 
 -- the email subject line. Null means "use the platform default."
 alter table organization add column if not exists twilio_from_number text;
 alter table organization add column if not exists whatsapp_phone_number_id text;
+
+-- 8.8: optional external CRM/PM webhook a lead_intent customer message is
+-- POSTed to — Connect routes the signal, it does not store/manage the lead.
+alter table business add column if not exists crm_webhook_url text;

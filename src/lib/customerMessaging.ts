@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js";
-import type { CustomerMessage } from "../types.js";
+import { classifyMessageIntent, routeLeadIntentMessage } from "./messageIntent.js";
+import type { Business, CustomerMessage } from "../types.js";
 
 export interface RecordCustomerMessageInput {
   businessId: string;
@@ -13,16 +14,32 @@ export interface RecordCustomerMessageInput {
  * missed-call text-back, and the call shape any future webchat-widget or
  * DM-platform webhook would use, mirroring src/lib/leadEvents.ts's pattern.
  * No webchat widget or DM integration exists in this codebase today; this is
- * the seam they'd plug into. */
+ * the seam they'd plug into. Phase 8.8: inbound messages get classified into
+ * a fixed intent category, and a lead_intent message is forwarded to the
+ * business's CRM webhook (if configured) — outbound messages are never
+ * classified since there's no customer reply to detect intent from. */
 export async function recordCustomerMessage(input: RecordCustomerMessageInput): Promise<void> {
-  const { error } = await supabase.from("customer_message").insert({
-    business_id: input.businessId,
-    channel: input.channel,
-    direction: input.direction,
-    customer_identifier: input.customerIdentifier,
-    body: input.body ?? null,
-  });
+  const intent = input.direction === "inbound" ? await classifyMessageIntent(input.body ?? null) : null;
+
+  const { data: inserted, error } = await supabase
+    .from("customer_message")
+    .insert({
+      business_id: input.businessId,
+      channel: input.channel,
+      direction: input.direction,
+      customer_identifier: input.customerIdentifier,
+      body: input.body ?? null,
+      intent,
+    })
+    .select()
+    .single();
   if (error) throw error;
+
+  if (intent === "lead_intent") {
+    const { data: business, error: businessError } = await supabase.from("business").select("*").eq("id", input.businessId).single();
+    if (businessError) throw businessError;
+    await routeLeadIntentMessage(business as Business, inserted as CustomerMessage);
+  }
 }
 
 /** The "DM inbox" data model the development program calls for — there is no
@@ -33,6 +50,21 @@ export async function getInboxForBusiness(businessId: string, sinceISO: string):
     .from("customer_message")
     .select("*")
     .eq("business_id", businessId)
+    .gte("created_at", sinceISO)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as CustomerMessage[];
+}
+
+/** Phase 8.8: lead_intent messages within a window, for the weekly digest's
+ * flagging line — Connect surfaces the signal in the owner-facing report,
+ * it does not store or manage the lead itself beyond this. */
+export async function getLeadIntentMessages(businessId: string, sinceISO: string): Promise<CustomerMessage[]> {
+  const { data, error } = await supabase
+    .from("customer_message")
+    .select("*")
+    .eq("business_id", businessId)
+    .eq("intent", "lead_intent")
     .gte("created_at", sinceISO)
     .order("created_at", { ascending: true });
   if (error) throw error;

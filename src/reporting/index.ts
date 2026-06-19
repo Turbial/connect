@@ -4,6 +4,7 @@ import { sendApprovalSms } from "../approval/sms.js";
 import { isLivePlatform } from "../lib/platformStatus.js";
 import { getConnectionSummary } from "../lib/platformConnection.js";
 import { getLeadEventsForBusiness } from "../lib/leadEvents.js";
+import { getLeadIntentMessages } from "../lib/customerMessaging.js";
 import { getOrganizationForBusiness, orgDisplayName } from "../lib/orgSettings.js";
 import { getLatestVisibilityScore } from "../visibility-score/index.js";
 import { getRecentlyResolvedFixes } from "../lib/nextBestFix.js";
@@ -27,6 +28,7 @@ interface WeeklyReportData {
   recurringFailurePlatforms: [string, number][];
   leadCount: number;
   attributedRevenueCents: number;
+  leadIntentMessageCount: number;
   bestPost: Post | null;
 }
 
@@ -99,6 +101,11 @@ async function fetchWeeklyReportData(business: Business, weekAgo: string): Promi
   const leadEvents = await getLeadEventsForBusiness(business.id, weekAgo);
   const attributedRevenueCents = leadEvents.reduce((sum, e) => sum + (e.amount_cents ?? 0), 0);
 
+  // Phase 8.8: lead_intent customer messages, surfaced as a count only — the
+  // owner sees these via the inbox (getInboxForBusiness)/CRM webhook, not a
+  // dump of message bodies into the digest.
+  const leadIntentMessages = await getLeadIntentMessages(business.id, weekAgo);
+
   return {
     publishedCount: typedPosts.length,
     pendingCount: (pendingItems ?? []).length,
@@ -111,6 +118,7 @@ async function fetchWeeklyReportData(business: Business, weekAgo: string): Promi
     recurringFailurePlatforms,
     leadCount: leadEvents.length,
     attributedRevenueCents,
+    leadIntentMessageCount: leadIntentMessages.length,
     bestPost: typedPosts.length > 0 ? typedPosts.reduce((best, p) => (p.views > best.views ? p : best)) : null,
   };
 }
@@ -171,6 +179,12 @@ export async function buildWeeklyReport(business: Business): Promise<string> {
   if (data.leadCount > 0) {
     const revenueLine = data.attributedRevenueCents > 0 ? `$${(data.attributedRevenueCents / 100).toFixed(2)} attributed revenue, ` : "";
     lines.push(`💰 ${revenueLine}${data.leadCount} lead${data.leadCount === 1 ? "" : "s"} this week`);
+  }
+
+  if (data.leadIntentMessageCount > 0) {
+    lines.push(
+      `📩 ${data.leadIntentMessageCount} customer message${data.leadIntentMessageCount === 1 ? "" : "s"} this week looked like a lead — check your inbox.`
+    );
   }
 
   const resolvedFixes = await getRecentlyResolvedFixes(business.id);
