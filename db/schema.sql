@@ -641,3 +641,45 @@ create table if not exists customer_message (
 
 create index if not exists idx_customer_message_business on customer_message(business_id, created_at);
 create index if not exists idx_customer_message_identifier on customer_message(business_id, customer_identifier);
+
+-- ── Development Program Phase 6 ─────────────────────────────────────────────
+
+-- 6.7: package/entitlement tier. Null defaults to the most restrictive tier
+-- (starter_audit) in src/lib/packages.ts — never silently full access.
+alter table business add column if not exists package_tier text;
+
+-- ── Development Program Phase 7 ─────────────────────────────────────────────
+
+-- 7.3: classified owner edit feedback, persisted per business as durable
+-- creative memory that biases future content generation (src/content-engine/
+-- generate.ts) rather than just resolving the single rewrite that triggered it.
+create table if not exists brand_memory (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  category text not null,
+  content text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_brand_memory_business on brand_memory(business_id);
+
+-- 7.4: surface dimension alongside media_type (feed | story | reel | short |
+-- carousel), only meaningfully distinct on a few platforms — see
+-- src/content-engine/generate.ts's surfaceFor().
+alter table content_item add column if not exists surface text not null default 'feed';
+
+-- 7.5: content calendar backend — what's planned for a business this week,
+-- independent of when it's actually generated/posted. The weekly batch job
+-- reads/writes against this instead of generating content purely ad hoc.
+create table if not exists content_calendar (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  platform text not null,
+  surface text not null default 'feed',
+  planned_date date not null,
+  status text not null default 'planned', -- planned | generated | approved | posted | skipped
+  content_item_id uuid references content_item(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_content_calendar_business on content_calendar(business_id, planned_date);

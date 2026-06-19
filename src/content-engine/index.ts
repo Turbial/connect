@@ -3,6 +3,7 @@ import { generatePost, generateTrendingIdea } from "./generate.js";
 import { getConnection, upsertConnection } from "../lib/platformConnection.js";
 import { statusOf } from "../lib/platformStatus.js";
 import { getOrganizationForBusiness } from "../lib/orgSettings.js";
+import { planWeek, markSlotStatus } from "../lib/contentCalendar.js";
 import type { Business, ContentLibraryItem, Platform } from "../types.js";
 
 /** The business-column value that identifies a connected account per platform,
@@ -383,10 +384,14 @@ export function connectedPlatforms(business: Business): Platform[] {
 }
 
 /**
- * Generates Phase 1's weekly batch (2-4 ideas) and queues one content_item per
- * connected platform per idea, with platform-tailored copy (Phase 2).
+ * Generates Phase 1's weekly batch and queues one content_item per planned
+ * calendar slot (Phase 7.5), with platform-tailored copy (Phase 2). The
+ * calendar's cadence (from BusinessProfile, defaulting to 3/week/platform
+ * when unset) determines how many slots exist for the week — this makes the
+ * batch calendar-driven rather than purely ad hoc, with no change to what
+ * gets posted for businesses that haven't set a custom cadence.
  */
-export async function queueWeeklyContent(business: Business, count = 3): Promise<void> {
+export async function queueWeeklyContent(business: Business): Promise<void> {
   // Phase 4.2: an org's emergency content pause skips the business entirely
   // (no-op, not a throw) so a paused brand doesn't keep generating content.
   const organization = await getOrganizationForBusiness(business);
@@ -396,24 +401,37 @@ export async function queueWeeklyContent(business: Business, count = 3): Promise
   await syncPlatformConnections(business, platforms);
   const trendingIdea = (await generateTrendingIdea(business)) ?? undefined;
 
-  for (let i = 0; i < count; i++) {
-    for (const platform of platforms) {
-      const { caption, captionVariantB, mediaUrl, mediaType, altText } = await generatePost(business, platform, trendingIdea);
+  const slots = await planWeek(business, platforms);
+  const pendingSlots = slots.filter((slot) => slot.status === "planned");
 
-      const { error } = await supabase.from("content_item").insert({
+  for (const slot of pendingSlots) {
+    const { caption, captionVariantB, mediaUrl, mediaType, altText, surface } = await generatePost(
+      business,
+      slot.platform,
+      trendingIdea,
+      undefined,
+      slot.surface
+    );
+
+    const { data: contentItem, error } = await supabase
+      .from("content_item")
+      .insert({
         business_id: business.id,
         source: "content_engine",
         caption,
         caption_variant_b: captionVariantB,
         media_url: mediaUrl,
         media_type: mediaType,
+        surface,
         alt_text: altText,
-        platforms: [platform],
+        platforms: [slot.platform],
         status: "queued",
-      });
+      })
+      .select()
+      .single();
 
-      if (error) throw error;
-    }
+    if (error) throw error;
+    await markSlotStatus(slot.id, "generated", contentItem.id);
   }
 }
 
@@ -429,7 +447,7 @@ export async function queueReviewTriggeredContent(
   await syncPlatformConnections(business, platforms);
 
   for (const platform of platforms) {
-    const { caption, captionVariantB, mediaUrl, mediaType, altText } = await generatePost(business, platform, brief, reviewRating);
+    const { caption, captionVariantB, mediaUrl, mediaType, altText, surface } = await generatePost(business, platform, brief, reviewRating);
 
     const { error } = await supabase.from("content_item").insert({
       business_id: business.id,
@@ -438,6 +456,7 @@ export async function queueReviewTriggeredContent(
       caption_variant_b: captionVariantB,
       media_url: mediaUrl,
       media_type: mediaType,
+      surface,
       alt_text: altText,
       platforms: [platform],
       status: "queued",

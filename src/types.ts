@@ -350,6 +350,7 @@ export interface ContentItem {
   caption_variant_b: string | null;
   media_url: string | null;
   media_type: MediaType;
+  surface: Surface;
   platforms: Platform[];
   status: ContentStatus;
   review_id: string | null;
@@ -413,6 +414,22 @@ export interface GeneratedPost {
   mediaType: MediaType;
   surface: Surface;
   altText: string | null;
+}
+
+export type CalendarSlotStatus = "planned" | "generated" | "approved" | "posted" | "skipped";
+
+/** Phase 7.5: a single planned content slot for a business — backend data
+ * model only, no UI. The weekly batch job reads/writes against this instead
+ * of generating content purely ad hoc per run. */
+export interface ContentCalendarSlot {
+  id: string;
+  business_id: string;
+  platform: Platform;
+  surface: Surface;
+  planned_date: string;
+  status: CalendarSlotStatus;
+  content_item_id: string | null;
+  created_at: string;
 }
 
 export interface AdCreative {
