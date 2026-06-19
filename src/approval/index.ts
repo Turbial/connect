@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase.js";
 import { sendApprovalSms, parseReply } from "./sms.js";
 import { sendApprovalEmail } from "./email.js";
+import { sendApprovalMessage } from "./channel.js";
 import { callDeepSeekPrompt } from "../content-engine/generate.js";
 import { getOrganizationForBusiness, orgDisplayName, resolveBusinessSetting } from "../lib/orgSettings.js";
 import type { ApprovalChainStep, Business, ContentItem, Organization } from "../types.js";
@@ -55,14 +56,8 @@ export async function requestApproval(business: Business, items: ContentItem[]):
   const displayName = orgDisplayName(organization);
   const message = buildMessage(business, items, displayName);
 
-  const channel = business.owner_phone ? "sms" : "email";
-  if (channel === "sms") {
-    await sendApprovalSms(business.owner_phone!, message);
-  } else if (business.owner_email) {
-    await sendApprovalEmail(business.owner_email, `Your ${displayName} posts are ready`, message);
-  } else {
-    throw new Error(`Business ${business.id} has no owner_phone or owner_email`);
-  }
+  const channel = business.owner_preferred_channel === "whatsapp" ? "whatsapp" : business.owner_phone ? "sms" : "email";
+  await sendApprovalMessage(business, `Your ${displayName} posts are ready`, message);
 
   const chainSteps = organization ? await getChainSteps(organization.id) : [];
   const firstStep = chainSteps[0];
@@ -244,13 +239,8 @@ export async function proposeEditRewrite(business: Business, item: EditQueueItem
     "Reply YES to use this version, or NO to leave it as-is.",
   ].join(" ");
 
-  if (business.owner_phone) {
-    await sendApprovalSms(business.owner_phone, message);
-  } else if (business.owner_email) {
-    await sendApprovalEmail(business.owner_email, "Revised post ready for review", message);
-  } else {
-    return;
-  }
+  if (!business.owner_phone && !business.owner_email && !business.owner_mobile) return;
+  await sendApprovalMessage(business, "Revised post ready for review", message);
 
   const { data: latestRequest, error: lookupError } = await supabase
     .from("approval_request")

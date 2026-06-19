@@ -12,8 +12,24 @@ import { platformStatusReport } from "./lib/platformStatus.js";
 import { handleMissedCall } from "./lib/missedCallTextback.js";
 import { recordCustomerMessage, getLatestInboundChannel } from "./lib/customerMessaging.js";
 import { sendApprovalSms } from "./approval/sms.js";
+import { whatsappButtonToText } from "./approval/whatsapp.js";
 import { sendOwnerVerificationCode, confirmOwnerVerification } from "./lib/ownerVerification.js";
 import type { Business, Platform } from "./types.js";
+
+/** Phase 7.1: dispatches a decision (already-resolved text, e.g. "yes"/"no"/
+ * "edit" from a WhatsApp button click, or the raw SMS body) for a business —
+ * shared by the SMS and WhatsApp webhooks so both channels run through the
+ * exact same boost/edit/approval decision code. */
+async function dispatchApprovalReply(business: Business, text: string): Promise<void> {
+  const normalized = text.trim().toLowerCase();
+  if (normalized.startsWith("boost") || (await hasPendingBoost(business.id))) {
+    await handleBoostReply(business, text);
+  } else if (await handleEditRewriteReply(business.id, text)) {
+    // A pending EDIT-rewrite proposal took priority and was resolved by this reply.
+  } else {
+    await handleSmsReply(business.id, text);
+  }
+}
 
 async function handleSmsWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
   let body = "";
@@ -51,16 +67,52 @@ async function handleSmsWebhook(req: http.IncomingMessage, res: http.ServerRespo
 
   // A BOOST-prefixed reply, or any pending boost prompt, takes priority over content approval
   // so an owner replying to a boost SMS with plain "yes" still resolves the boost, not content.
-  const normalized = text.trim().toLowerCase();
-  if (normalized.startsWith("boost") || (await hasPendingBoost(resolvedBusiness.id))) {
-    await handleBoostReply(resolvedBusiness as Business, text);
-  } else if (await handleEditRewriteReply(resolvedBusiness.id, text)) {
-    // A pending EDIT-rewrite proposal took priority and was resolved by this reply.
-  } else {
-    await handleSmsReply(resolvedBusiness.id, text);
-  }
+  await dispatchApprovalReply(resolvedBusiness as Business, text);
 
   res.writeHead(200, { "Content-Type": "text/xml" }).end("<Response></Response>");
+}
+
+/** Phase 7.1: WhatsApp Business API inbound webhook (Meta's standard
+ * messages-change payload shape). Button-click replies carry an
+ * `interactive.button_reply.id`; users who type instead of tapping send a
+ * plain `text.body` — both resolve to plain text via whatsappButtonToText
+ * and dispatch through the exact same decision code as an SMS reply. */
+async function handleWhatsappWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+
+  let payload;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    res.writeHead(400).end();
+    return;
+  }
+
+  const message = payload?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+  const from: string | undefined = message?.from;
+  const rawReply: string | undefined = message?.interactive?.button_reply?.id ?? message?.text?.body;
+
+  if (!from || !rawReply) {
+    res.writeHead(200).end();
+    return;
+  }
+
+  const { data: byPhone, error: phoneError } = await supabase.from("business").select("*").eq("owner_phone", from).maybeSingle();
+  if (phoneError) throw phoneError;
+  const { data: byMobile, error: mobileError } = byPhone
+    ? { data: null, error: null }
+    : await supabase.from("business").select("*").eq("owner_mobile", from).maybeSingle();
+  if (mobileError) throw mobileError;
+  const business = byPhone ?? byMobile;
+
+  if (!business) {
+    res.writeHead(404).end();
+    return;
+  }
+
+  await dispatchApprovalReply(business as Business, whatsappButtonToText(rawReply));
+  res.writeHead(200).end();
 }
 
 /** Phase 4.2: finds the business a chain-step phone's reply applies to — the
@@ -256,6 +308,10 @@ async function handleCustomerMessageReplyRoute(req: http.IncomingMessage, res: h
 const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/webhooks/sms") {
     await handleSmsWebhook(req, res);
+    return;
+  }
+  if (req.method === "POST" && req.url === "/webhooks/whatsapp") {
+    await handleWhatsappWebhook(req, res);
     return;
   }
   if (req.method === "POST" && req.url === "/webhooks/reach-review") {

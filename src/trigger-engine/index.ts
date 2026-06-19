@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase.js";
+import { sendApprovalWhatsapp, boostButtons } from "../approval/whatsapp.js";
 import { sendApprovalSms } from "../approval/sms.js";
 import { sendApprovalEmail } from "../approval/email.js";
 import { getOrganizationForBusiness, orgDisplayName, resolveBusinessSetting } from "../lib/orgSettings.js";
@@ -65,7 +66,9 @@ export async function evaluateBoostTriggers(business: Business): Promise<void> {
       `Want to turn it into a paid ad to reach more people? Reply BOOST YES or BOOST NO.`,
     ].join(" ");
 
-    if (business.owner_phone) {
+    if (business.owner_preferred_channel === "whatsapp" && (business.owner_mobile || business.owner_phone)) {
+      await sendApprovalWhatsapp(business.owner_mobile ?? business.owner_phone!, message, { buttons: boostButtons() });
+    } else if (business.owner_phone) {
       await sendApprovalSms(business.owner_phone, message);
     } else if (business.owner_email) {
       await sendApprovalEmail(business.owner_email, `Boost this post? — ${orgDisplayName(organization)}`, message);
