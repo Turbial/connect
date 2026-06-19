@@ -4,7 +4,7 @@ import { getConnection, upsertConnection } from "../lib/platformConnection.js";
 import { statusOf } from "../lib/platformStatus.js";
 import { getOrganizationForBusiness } from "../lib/orgSettings.js";
 import { planWeek, markSlotStatus } from "../lib/contentCalendar.js";
-import type { Business, ContentLibraryItem, Platform } from "../types.js";
+import type { Business, ContentItem, ContentLibraryItem, Platform } from "../types.js";
 
 /** The business-column value that identifies a connected account per platform,
  * used to sync platform_connection rows (Phase 2.1) without requiring every
@@ -435,36 +435,56 @@ export async function queueWeeklyContent(business: Business): Promise<void> {
   }
 }
 
-/** Phase 4: generates a single draft from a review and queues it across connected platforms.
+/** Phase 4: generates a single draft from a review and queues it across connected
+ * platforms; Phase 7.6 adds a same-day content_calendar entry per item (status
+ * "generated") so a review-triggered quote-card is tracked the same way as any
+ * other planned slot, rather than existing only as a bare content_item.
  * reviewRating drives sentiment-aware tone adjustment in the Content Engine (Phase 9). */
 export async function queueReviewTriggeredContent(
   business: Business,
   reviewId: string,
   brief: string,
   reviewRating?: number | null
-): Promise<void> {
+): Promise<ContentItem[]> {
   const platforms = connectedPlatforms(business);
   await syncPlatformConnections(business, platforms);
 
+  const items: ContentItem[] = [];
   for (const platform of platforms) {
     const { caption, captionVariantB, mediaUrl, mediaType, altText, surface } = await generatePost(business, platform, brief, reviewRating);
 
-    const { error } = await supabase.from("content_item").insert({
-      business_id: business.id,
-      source: "review_triggered",
-      caption,
-      caption_variant_b: captionVariantB,
-      media_url: mediaUrl,
-      media_type: mediaType,
-      surface,
-      alt_text: altText,
-      platforms: [platform],
-      status: "queued",
-      review_id: reviewId,
-    });
+    const { data: contentItem, error } = await supabase
+      .from("content_item")
+      .insert({
+        business_id: business.id,
+        source: "review_triggered",
+        caption,
+        caption_variant_b: captionVariantB,
+        media_url: mediaUrl,
+        media_type: mediaType,
+        surface,
+        alt_text: altText,
+        platforms: [platform],
+        status: "queued",
+        review_id: reviewId,
+      })
+      .select()
+      .single();
 
     if (error) throw error;
+    items.push(contentItem as ContentItem);
+
+    const { error: calendarError } = await supabase.from("content_calendar").insert({
+      business_id: business.id,
+      platform,
+      surface,
+      planned_date: new Date().toISOString().slice(0, 10),
+      status: "generated",
+      content_item_id: contentItem.id,
+    });
+    if (calendarError) throw calendarError;
   }
+  return items;
 }
 
 /** Phase 4.2: queues a pre-approved content library item directly as
