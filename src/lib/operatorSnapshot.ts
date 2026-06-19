@@ -34,6 +34,26 @@ export interface OperatorSnapshot {
  * signal used to flag a review as needing attention. */
 const NEGATIVE_REVIEW_RATING_CEILING = 3;
 
+/** Pending owner approvals (content not yet approved/declined) for a business. */
+export async function getPendingApprovals(businessId: string): Promise<PendingApprovalSummary[]> {
+  const { data: items, error: itemsError } = await supabase.from("content_item").select("id").eq("business_id", businessId);
+  if (itemsError) throw itemsError;
+  const itemIds = (items ?? []).map((i) => i.id as string);
+  if (itemIds.length === 0) return [];
+
+  const { data: requests, error: requestsError } = await supabase
+    .from("approval_request")
+    .select("content_item_id, channel, sent_at")
+    .in("content_item_id", itemIds)
+    .is("responded_at", null);
+  if (requestsError) throw requestsError;
+  return (requests ?? []).map((r) => ({
+    contentItemId: r.content_item_id as string,
+    channel: r.channel as string,
+    sentAt: r.sent_at as string,
+  }));
+}
+
 /** Phase 8.9: read-only assembly of everything an operator (owner or future
  * agent) needs to see a business's current state at a glance — built entirely
  * from data already computed by prior phases, no new collection logic. */
@@ -50,24 +70,7 @@ export async function buildOperatorSnapshot(businessId: string): Promise<Operato
     getRecentAgentActions(businessId),
   ]);
 
-  const { data: items, error: itemsError } = await supabase.from("content_item").select("id").eq("business_id", businessId);
-  if (itemsError) throw itemsError;
-  const itemIds = (items ?? []).map((i) => i.id as string);
-
-  let pendingApprovals: PendingApprovalSummary[] = [];
-  if (itemIds.length > 0) {
-    const { data: requests, error: requestsError } = await supabase
-      .from("approval_request")
-      .select("content_item_id, channel, sent_at")
-      .in("content_item_id", itemIds)
-      .is("responded_at", null);
-    if (requestsError) throw requestsError;
-    pendingApprovals = (requests ?? []).map((r) => ({
-      contentItemId: r.content_item_id as string,
-      channel: r.channel as string,
-      sentAt: r.sent_at as string,
-    }));
-  }
+  const pendingApprovals = await getPendingApprovals(businessId);
 
   const { data: reviews, error: reviewsError } = await supabase
     .from("review")

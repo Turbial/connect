@@ -1,4 +1,4 @@
-import { getLatestVisibilityScore } from "../visibility-score/index.js";
+import { callTool } from "../tools/registry.js";
 import type { VisibilityScore } from "../types.js";
 
 /**
@@ -38,8 +38,13 @@ export function renderWhatsNext(score: VisibilityScore): string {
   return `Your biggest issue: ${score.nextBestFix}${impactLine}`;
 }
 
+/** Phase 8.10: the router's first real owner-facing trigger path — a
+ * show_score/whats_next chat reply is now tool-dispatched (`get_visibility_score`)
+ * instead of calling the visibility-score module directly, so this same code
+ * path also produces an `agent_action` row for every chat-based score check. */
 export async function buildChatIntentReply(businessId: string, intent: ChatIntent): Promise<string> {
-  const score = await getLatestVisibilityScore(businessId);
+  const result = await callTool("get_visibility_score", businessId, { source: "owner_message" });
+  const score = result.status === "completed" ? (result.output as VisibilityScore | null) : null;
   if (!score) return "Your visibility score hasn't been computed yet — check back after your first audit run.";
   return intent === "show_score" ? renderScoreCard(score) : renderWhatsNext(score);
 }
