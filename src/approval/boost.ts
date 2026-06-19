@@ -70,8 +70,8 @@ export async function handleBoostReply(business: Business, body: string): Promis
 
   const { data: posts, error: postsError } = await supabase
     .from("post")
-    .select("*, content_item:content_item_id(business_id, caption)")
-    .returns<(Post & { content_item: { business_id: string; caption: string } | null })[]>();
+    .select("*, content_item:content_item_id(business_id, caption, caption_variant_b)")
+    .returns<(Post & { content_item: { business_id: string; caption: string; caption_variant_b: string | null } | null })[]>();
   if (postsError) throw postsError;
 
   const businessPostIds = (posts ?? [])
@@ -102,7 +102,10 @@ export async function handleBoostReply(business: Business, body: string): Promis
   if (decision !== "yes") return;
 
   const post = (posts ?? []).find((p) => p.id === trigger.post_id);
-  const caption = post?.content_item?.caption ?? "";
+  // Phase 8.1: the boost_trigger may point at the winning "b" post when a
+  // staggered A/B test ran — boost the caption that actually won, not
+  // always the "a" variant's text.
+  const caption = (post?.variant === "b" ? post.content_item?.caption_variant_b : post?.content_item?.caption) ?? "";
 
   const organization = await getOrganizationForBusiness(business);
   const defaultBudgetCents = resolveBusinessSetting(business, organization, "boost_budget_cents", DEFAULT_BUDGET_CENTS);

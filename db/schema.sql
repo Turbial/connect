@@ -459,6 +459,7 @@ create index if not exists idx_service_signal_module on service_signal(module);
 -- ── Development Program Phase 1.3/1.4: reliability primitives ──────────────
 -- Idempotency: prevent duplicate live posts to the same platform for the
 -- same content item if a dispatch is retried after a partial failure.
+-- Superseded by a (content_item_id, platform, variant) index in Phase 8.1.
 create unique index if not exists idx_post_unique_item_platform on post(content_item_id, platform);
 
 -- Structured, queryable failure logging for distribution dispatch, instead
@@ -700,3 +701,13 @@ create table if not exists next_best_fix (
 );
 
 create index if not exists idx_next_best_fix_business on next_best_fix(business_id);
+
+-- ── Development Program Phase 8 ─────────────────────────────────────────────
+-- 8.1: a content item's caption_variant_b can now be posted as its own,
+-- separately trackable post (staggered after the "a" variant, when organic
+-- split-testing is feasible) so its engagement can be measured rather than
+-- only ever existing as approval-flow reference text.
+alter table post add column if not exists variant text not null default 'a'; -- a | b
+
+drop index if exists idx_post_unique_item_platform;
+create unique index if not exists idx_post_unique_item_platform_variant on post(content_item_id, platform, variant);

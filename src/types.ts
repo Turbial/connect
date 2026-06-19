@@ -382,6 +382,9 @@ export interface Post {
   impressions: number;
   shares: number;
   last_polled_at: string | null;
+  /** "b" only for a staggered organic split-test post of the same content
+   * item's caption_variant_b (Phase 8.1) — "a" for every post otherwise. */
+  variant: "a" | "b";
 }
 
 export interface BoostTrigger {

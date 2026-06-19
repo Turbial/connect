@@ -22,6 +22,23 @@ function meetsThreshold(business: Business, organization: Organization | null, p
   return post.views >= viewsThreshold || post.engagement >= engagementThreshold;
 }
 
+/** Phase 8.1: cites the real measured engagement difference between a
+ * content item's two staggered organic posts, per the doc's example ("We
+ * tested two versions. Version B got 42% more engagement.") — only ever
+ * called when a measured "b" post actually exists, never fabricated. */
+export function buildComparisonMessage(postA: Post, postB: Post, captionA: string, captionB: string): string {
+  const winnerIsB = postB.engagement > postA.engagement;
+  const winner = winnerIsB ? postB : postA;
+  const loserEngagement = winnerIsB ? postA.engagement : postB.engagement;
+  const winnerCaption = winnerIsB ? captionB : captionA;
+  const pctDiff = loserEngagement > 0 ? Math.round(((winner.engagement - loserEngagement) / loserEngagement) * 100) : 100;
+
+  return [
+    `We tested two versions of "${winnerCaption.slice(0, 60)}". Version ${winnerIsB ? "B" : "A"} got ${pctDiff}% more engagement (${winner.views} views, ${winner.engagement} engagement).`,
+    `Want to boost it to reach more people? Reply BOOST YES or BOOST NO.`,
+  ].join(" ");
+}
+
 /** Scans a business's posted content for organic performance that clears the boost threshold,
  * and prompts the owner to approve turning it into a paid ad. */
 export async function evaluateBoostTriggers(business: Business): Promise<void> {
@@ -34,17 +51,19 @@ export async function evaluateBoostTriggers(business: Business): Promise<void> {
 
   const { data: itemIds, error: itemsError } = await supabase
     .from("content_item")
-    .select("id, caption")
+    .select("id, caption, caption_variant_b")
     .eq("business_id", business.id);
   if (itemsError) throw itemsError;
 
   const captionByItemId = new Map((itemIds ?? []).map((i) => [i.id, i.caption as string]));
+  const captionBByItemId = new Map((itemIds ?? []).map((i) => [i.id, i.caption_variant_b as string | null]));
 
   const { data: posts, error } = await supabase
     .from("post")
     .select("*")
     .in("content_item_id", (itemIds ?? []).map((i) => i.id));
   if (error) throw error;
+  const allPosts = (posts ?? []) as Post[];
 
   const { data: existingTriggers, error: triggerError } = await supabase
     .from("boost_trigger")
@@ -52,19 +71,32 @@ export async function evaluateBoostTriggers(business: Business): Promise<void> {
   if (triggerError) throw triggerError;
   const triggeredPostIds = new Set((existingTriggers ?? []).map((t) => t.post_id));
 
-  for (const post of (posts ?? []) as Post[]) {
+  // Only "a" variants are scanned for trigger eligibility — a "b" variant
+  // (Phase 8.1) is a comparison data point for its sibling "a" post, not an
+  // independent boost candidate of its own.
+  for (const post of allPosts.filter((p) => p.variant === "a")) {
     if (triggeredPostIds.has(post.id) || !meetsThreshold(business, organization, post)) continue;
 
+    // Phase 8.1: where a sibling "b" post exists and has been measured (its
+    // performance poll has run at least once), cite the real comparison
+    // rather than proposing the boost on a single untested variant.
+    const variantB = allPosts.find(
+      (p) => p.content_item_id === post.content_item_id && p.platform === post.platform && p.variant === "b" && p.last_polled_at
+    );
+
+    const winner = variantB && variantB.engagement > post.engagement ? variantB : post;
     const { error: insertError } = await supabase
       .from("boost_trigger")
-      .insert({ post_id: post.id, ad_platform: adPlatform });
+      .insert({ post_id: winner.id, ad_platform: adPlatform });
     if (insertError) throw insertError;
 
     const caption = captionByItemId.get(post.content_item_id) ?? "your recent post";
-    const message = [
-      `Great news — "${caption.slice(0, 80)}" is performing well (${post.views} views, ${post.engagement} engagement).`,
-      `Want to turn it into a paid ad to reach more people? Reply BOOST YES or BOOST NO.`,
-    ].join(" ");
+    const message = variantB
+      ? buildComparisonMessage(post, variantB, caption, captionBByItemId.get(post.content_item_id) ?? caption)
+      : [
+          `Great news — "${caption.slice(0, 80)}" is performing well (${post.views} views, ${post.engagement} engagement).`,
+          `Want to turn it into a paid ad to reach more people? Reply BOOST YES or BOOST NO.`,
+        ].join(" ");
 
     if (business.owner_preferred_channel === "whatsapp" && (business.owner_mobile || business.owner_phone)) {
       await sendApprovalWhatsapp(business.owner_mobile ?? business.owner_phone!, message, { buttons: boostButtons() });

@@ -37,7 +37,7 @@ import { postToYandex } from "./yandex.js";
 import { genericAdapters } from "./genericAdapter.js";
 import { isLivePlatform } from "../lib/platformStatus.js";
 import { withRetry } from "../lib/retry.js";
-import type { Business, ContentItem, Platform } from "../types.js";
+import type { Business, ContentItem, Platform, Post } from "../types.js";
 
 async function postToPlatform(business: Business, item: ContentItem, platform: Platform) {
   if (platform === "gbp") return postToGbp(business, item);
@@ -81,6 +81,44 @@ async function postToPlatform(business: Business, item: ContentItem, platform: P
   throw new Error(`Unsupported platform: ${platform}`);
 }
 
+async function recordPost(
+  business: Business,
+  item: ContentItem,
+  platform: Platform,
+  variant: "a" | "b",
+  postFn: () => ReturnType<typeof postToPlatform>
+): Promise<void> {
+  try {
+    const result = await withRetry(postFn);
+
+    // Idempotent on (content_item_id, platform, variant): a retried dispatch
+    // for a variant that already posted to this platform is a no-op, not a
+    // duplicate live post.
+    const { error: postError } = await supabase
+      .from("post")
+      .upsert(
+        {
+          content_item_id: item.id,
+          platform,
+          variant,
+          platform_post_id: result.platformPostId,
+          posted_at: new Date().toISOString(),
+          impressions: 0,
+          shares: 0,
+        },
+        { onConflict: "content_item_id,platform,variant", ignoreDuplicates: true }
+      );
+    if (postError) throw postError;
+  } catch (err) {
+    await supabase.from("distribution_failure").insert({
+      business_id: business.id,
+      content_item_id: item.id,
+      platform,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 /** Posts every approved content item for a business to its target platforms. */
 export async function postApprovedContent(business: Business): Promise<void> {
   const { data: items, error } = await supabase
@@ -98,36 +136,58 @@ export async function postApprovedContent(business: Business): Promise<void> {
         continue;
       }
 
-      try {
-        const result = await withRetry(() => postToPlatform(business, item, platform));
-
-        // Idempotent on (content_item_id, platform): a retried dispatch for
-        // an item that already posted to this platform is a no-op, not a
-        // duplicate live post.
-        const { error: postError } = await supabase
-          .from("post")
-          .upsert(
-            {
-              content_item_id: item.id,
-              platform,
-              platform_post_id: result.platformPostId,
-              posted_at: new Date().toISOString(),
-              impressions: 0,
-              shares: 0,
-            },
-            { onConflict: "content_item_id,platform", ignoreDuplicates: true }
-          );
-        if (postError) throw postError;
-      } catch (err) {
-        await supabase.from("distribution_failure").insert({
-          business_id: business.id,
-          content_item_id: item.id,
-          platform,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
+      await recordPost(business, item, platform, "a", () => postToPlatform(business, item, platform));
     }
 
     await supabase.from("content_item").update({ status: "posted" }).eq("id", item.id);
+  }
+}
+
+/** Phase 8.1: hours to wait after the "a" variant goes live before posting
+ * "b" as its own staggered post — long enough for the "a" variant to have
+ * accrued some organic engagement of its own to compare against. */
+const VARIANT_B_STAGGER_HOURS = 24;
+
+/** Posts a content item's caption_variant_b as a second, separately
+ * trackable post once its "a" variant has had time to accrue organic
+ * engagement — real staggered A/B testing where the platform/posting flow
+ * allows it. Items with no distinct caption_variant_b are untouched, so
+ * they fall back to today's single-variant flow exactly as before. */
+export async function postVariantBIfDue(business: Business): Promise<void> {
+  const { data: items, error } = await supabase
+    .from("content_item")
+    .select("*")
+    .eq("business_id", business.id)
+    .eq("status", "posted")
+    .not("caption_variant_b", "is", null);
+  if (error) throw error;
+
+  const candidates = (items ?? []).filter((i) => i.caption_variant_b && i.caption_variant_b !== i.caption) as ContentItem[];
+  if (candidates.length === 0) return;
+
+  const { data: posts, error: postsError } = await supabase
+    .from("post")
+    .select("*")
+    .in("content_item_id", candidates.map((i) => i.id));
+  if (postsError) throw postsError;
+  const typedPosts = (posts ?? []) as Post[];
+
+  const staggerCutoff = Date.now() - VARIANT_B_STAGGER_HOURS * 60 * 60 * 1000;
+
+  for (const item of candidates) {
+    const itemPosts = typedPosts.filter((p) => p.content_item_id === item.id);
+
+    for (const platform of item.platforms) {
+      if (!isLivePlatform(platform)) continue;
+
+      const variantA = itemPosts.find((p) => p.platform === platform && p.variant === "a");
+      if (!variantA?.posted_at || new Date(variantA.posted_at).getTime() > staggerCutoff) continue;
+
+      const alreadyHasB = itemPosts.some((p) => p.platform === platform && p.variant === "b");
+      if (alreadyHasB) continue;
+
+      const variantBItem: ContentItem = { ...item, caption: item.caption_variant_b! };
+      await recordPost(business, item, platform, "b", () => postToPlatform(business, variantBItem, platform));
+    }
   }
 }
