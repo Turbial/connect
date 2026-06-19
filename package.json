@@ -1,0 +1,26 @@
+{
+  "name": "connect",
+  "version": "0.1.0",
+  "description": "MightyMax Distribution Layer — organic posting, approval flow, performance tracking, and reporting that connects MotionBlue, TurboAd, and Reach",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "weekly": "tsx src/jobs/weeklyBatch.ts",
+    "collect": "tsx src/jobs/collectPerformance.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "dotenv": "^16.4.5",
+    "twilio": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
