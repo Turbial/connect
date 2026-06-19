@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase.js";
-import type { Business, ServiceSignal, VisibilityScore } from "../types.js";
+import type { Business, DataConfidence, ScoreDriver, ServiceSignal, VisibilityScore } from "../types.js";
 
 /**
  * Phase 3.2: aggregates the most recent signal from each of the 18 audit/
@@ -24,6 +24,31 @@ import type { Business, ServiceSignal, VisibilityScore } from "../types.js";
  */
 
 const RECOMMENDATION_THRESHOLD = 70;
+
+/** Phase 6.1: a signal older than this no longer counts as "verified" for the
+ * data-confidence label, even though its score still feeds the category
+ * (changing the score itself for stale data would be a second, conflated
+ * judgment call — confidence is reported separately instead). */
+const STALE_DAYS = 14;
+
+/** Worst-case-wins ordering so a category with any missing input is labeled
+ * "missing" rather than averaging confidence levels across its inputs. */
+function worseConfidence(a: DataConfidence, b: DataConfidence): DataConfidence {
+  const rank: Record<DataConfidence, number> = { missing: 0, stale: 1, verified: 2 };
+  return rank[a] <= rank[b] ? a : b;
+}
+
+/** Phase 6.1: classifies a single underlying input as verified/stale/missing.
+ * `value === null/undefined` means the signal was never captured at all;
+ * a present value with a timestamp older than STALE_DAYS is "stale" rather
+ * than fabricated as current; anything else (present, no timestamp, or
+ * within the window) is "verified". */
+function confidenceFor(value: unknown, timestamp?: string | null): DataConfidence {
+  if (value === null || value === undefined) return "missing";
+  if (!timestamp) return "verified";
+  const ageDays = (Date.now() - new Date(timestamp).getTime()) / (1000 * 60 * 60 * 24);
+  return ageDays > STALE_DAYS ? "stale" : "verified";
+}
 
 interface LatestSignals {
   byModule: Map<string, ServiceSignal>;
@@ -55,6 +80,14 @@ function numericSignal(signals: LatestSignals, module: string): number | null {
   if (!row || row.value === null) return null;
   const n = Number(row.value);
   return Number.isFinite(n) ? n : null;
+}
+
+/** Confidence for a service-module-backed signal, using that module's own
+ * captured_at — distinct from confidenceFor's generic timestamp handling
+ * because the value and the timestamp both live on the same signals row. */
+function moduleConfidence(signals: LatestSignals, module: string): DataConfidence {
+  const row = signals.byModule.get(module);
+  return confidenceFor(row?.value ?? null, row?.captured_at ?? null);
 }
 
 // ── Per-module normalizers: each maps that module's raw value to 0-100. ────
@@ -197,6 +230,7 @@ export function scoreFromAdsReadiness(business: Business): number {
 interface CategoryResult {
   score: number;
   recommendation: string | null;
+  confidence: DataConfidence;
 }
 
 async function computeCategories(business: Business, signals: LatestSignals): Promise<Record<string, CategoryResult>> {
@@ -206,7 +240,7 @@ async function computeCategories(business: Business, signals: LatestSignals): Pr
     .eq("business_id", business.id)
     .order("run_at", { ascending: false })
     .limit(1);
-  const seoAudit = (seoAudits ?? [])[0] as { score: number; issues: string[] } | undefined;
+  const seoAudit = (seoAudits ?? [])[0] as { score: number; issues: string[]; run_at: string } | undefined;
 
   const { data: dupListings } = await supabase
     .from("duplicate_listing_flag")
@@ -219,7 +253,7 @@ async function computeCategories(business: Business, signals: LatestSignals): Pr
     .eq("business_id", business.id)
     .order("captured_at", { ascending: false })
     .limit(1);
-  const latestRank = (rankSnapshots ?? [])[0] as { rank: number | null } | undefined;
+  const latestRank = (rankSnapshots ?? [])[0] as { rank: number | null; captured_at: string } | undefined;
 
   const { data: sentimentTrends } = await supabase
     .from("sentiment_trend")
@@ -227,7 +261,7 @@ async function computeCategories(business: Business, signals: LatestSignals): Pr
     .eq("business_id", business.id)
     .order("period_end", { ascending: false })
     .limit(1);
-  const latestSentiment = (sentimentTrends ?? [])[0] as { avg_rating: number } | undefined;
+  const latestSentiment = (sentimentTrends ?? [])[0] as { avg_rating: number; period_end: string } | undefined;
 
   const { data: listingSyncs } = await supabase
     .from("listing_sync")
@@ -235,7 +269,7 @@ async function computeCategories(business: Business, signals: LatestSignals): Pr
     .eq("business_id", business.id)
     .order("synced_at", { ascending: false })
     .limit(1);
-  const latestListingSync = (listingSyncs ?? [])[0] as { status: "success" | "failed" } | undefined;
+  const latestListingSync = (listingSyncs ?? [])[0] as { status: "success" | "failed"; synced_at: string } | undefined;
 
   const { data: competitors } = await supabase.from("competitor").select("id").eq("business_id", business.id);
   let competitorRatings: number[] = [];
@@ -273,9 +307,39 @@ async function computeCategories(business: Business, signals: LatestSignals): Pr
   const altCoverage = numericSignal(signals, "image-alt-coverage");
   const daysStale = numericSignal(signals, "content-freshness");
 
+  // Worst-case confidence across each category's contributing inputs — a
+  // category is only "verified" if every input behind it is.
+  const listingsConfidence = worseConfidence(
+    confidenceFor(latestListingSync?.status ?? null, latestListingSync?.synced_at),
+    moduleConfidence(signals, "local-citation-count")
+  );
+  const reviewsConfidence = worseConfidence(
+    worseConfidence(moduleConfidence(signals, "social-proof-badge"), moduleConfidence(signals, "duplicate-review-flag")),
+    confidenceFor(latestSentiment?.avg_rating ?? null, latestSentiment?.period_end)
+  );
+  const websiteHealthConfidence = worseConfidence(
+    worseConfidence(moduleConfidence(signals, "page-speed"), moduleConfidence(signals, "mobile-friendliness")),
+    moduleConfidence(signals, "structured-data")
+  );
+  const searchPresenceConfidence = worseConfidence(
+    worseConfidence(confidenceFor(latestRank?.rank ?? null, latestRank?.captured_at), confidenceFor(seoAudit?.score ?? null, seoAudit?.run_at)),
+    moduleConfidence(signals, "backlink-count")
+  );
+  const socialActivityConfidence = moduleConfidence(signals, "social-follower-count");
+  const contentFreshnessConfidence = moduleConfidence(signals, "content-freshness");
+  const competitorStrengthConfidence =
+    competitorRatings.length === 0 ? "missing" : confidenceFor(latestSentiment?.avg_rating ?? null, latestSentiment?.period_end);
+  const adsReadinessConfidence: DataConfidence = "verified"; // live business field, not a captured signal
+  const responseRateConfidence = worseConfidence(moduleConfidence(signals, "review-response-rate"), moduleConfidence(signals, "business-hours-consistency"));
+  const profileCompletenessConfidence = worseConfidence(
+    confidenceFor(seoAudit?.score ?? null, seoAudit?.run_at),
+    moduleConfidence(signals, "image-alt-coverage")
+  );
+
   return {
     listings: {
       score: listingsScore,
+      confidence: listingsConfidence,
       recommendation:
         listingsScore < RECOMMENDATION_THRESHOLD
           ? latestListingSync?.status === "failed"
@@ -285,6 +349,7 @@ async function computeCategories(business: Business, signals: LatestSignals): Pr
     },
     reviews: {
       score: reviewsScore,
+      confidence: reviewsConfidence,
       recommendation:
         reviewsScore < RECOMMENDATION_THRESHOLD
           ? boolSignal(signals, "duplicate-review-flag")
@@ -294,24 +359,28 @@ async function computeCategories(business: Business, signals: LatestSignals): Pr
     },
     "website health": {
       score: websiteHealthScore,
+      confidence: websiteHealthConfidence,
       recommendation:
         websiteHealthScore < RECOMMENDATION_THRESHOLD ? "Run a PageSpeed/mobile-friendliness check and fix the slowest-loading pages on your site." : null,
     },
     "search presence": {
       score: searchPresenceScore,
+      confidence: searchPresenceConfidence,
       recommendation:
         searchPresenceScore < RECOMMENDATION_THRESHOLD
           ? dupListingCount > 0
             ? `${dupListingCount} possible duplicate listing${dupListingCount === 1 ? "" : "s"} found for your business name — request removal to consolidate ranking signals.`
             : "Your local search rank is low for your business name — improve NAP consistency and add fresh content to climb."
           : null,
-    },
+      },
     "social activity": {
       score: socialActivityScore,
+      confidence: socialActivityConfidence,
       recommendation: socialActivityScore < RECOMMENDATION_THRESHOLD ? "Connect more social platforms to widen your reach beyond your current footprint." : null,
     },
     "content freshness": {
       score: contentFreshnessScore,
+      confidence: contentFreshnessConfidence,
       recommendation:
         contentFreshnessScore < RECOMMENDATION_THRESHOLD
           ? `It's been ${daysStale ?? "many"} days since your last post — approve this week's queued content to stay active.`
@@ -319,15 +388,18 @@ async function computeCategories(business: Business, signals: LatestSignals): Pr
     },
     "competitor strength": {
       score: competitorStrengthScore,
+      confidence: competitorStrengthConfidence,
       recommendation:
         competitorStrengthScore < RECOMMENDATION_THRESHOLD ? "Tracked competitors are outrating you — focus on review generation to close the gap." : null,
     },
     "ads readiness": {
       score: adsReadinessScore,
+      confidence: adsReadinessConfidence,
       recommendation: adsReadinessScore < RECOMMENDATION_THRESHOLD ? "Connect a Meta or Google Ads account so high-performing posts can be boosted." : null,
     },
     "response rate": {
       score: responseRateScore,
+      confidence: responseRateConfidence,
       recommendation:
         responseRateScore < RECOMMENDATION_THRESHOLD
           ? hoursComplete === false
@@ -337,6 +409,7 @@ async function computeCategories(business: Business, signals: LatestSignals): Pr
     },
     "profile completeness": {
       score: profileCompletenessScore,
+      confidence: profileCompletenessConfidence,
       recommendation:
         profileCompletenessScore < RECOMMENDATION_THRESHOLD
           ? seoAudit && seoAudit.issues.length > 0
@@ -349,14 +422,57 @@ async function computeCategories(business: Business, signals: LatestSignals): Pr
   };
 }
 
+const NEUTRAL_MIDPOINT = 50;
+
+/** Phase 6.1: ranks every category by how far it pulls the overall score from
+ * a neutral midpoint, so the owner sees what's actually driving the number —
+ * not just an unordered breakdown. */
+function rankDrivers(categoryBreakdown: Record<string, number>): ScoreDriver[] {
+  return Object.entries(categoryBreakdown)
+    .map(([category, score]) => ({
+      category,
+      score,
+      direction: (score >= NEUTRAL_MIDPOINT ? "positive" : "negative") as ScoreDriver["direction"],
+    }))
+    .sort((a, b) => Math.abs(b.score - NEUTRAL_MIDPOINT) - Math.abs(a.score - NEUTRAL_MIDPOINT));
+}
+
+/** Phase 6.1: the single negative driver with the largest score impact that
+ * has a known remediation already attached — never a generated/guessed
+ * claim, just the existing per-category recommendation for the worst real
+ * offender. Categories below the recommendation threshold but without a
+ * recommendation string are skipped rather than fabricating one. */
+function pickNextBestFix(categories: Record<string, CategoryResult>): string | null {
+  let worst: { score: number; recommendation: string } | null = null;
+  for (const result of Object.values(categories)) {
+    if (!result.recommendation) continue;
+    if (!worst || result.score < worst.score) {
+      worst = { score: result.score, recommendation: result.recommendation };
+    }
+  }
+  return worst?.recommendation ?? null;
+}
+
+function buildDataConfidence(categories: Record<string, CategoryResult>): Record<string, DataConfidence> {
+  const dataConfidence: Record<string, DataConfidence> = {};
+  for (const [category, result] of Object.entries(categories)) {
+    dataConfidence[category] = result.confidence;
+  }
+  return dataConfidence;
+}
+
 /** Computes and persists a 0-100 Local Visibility Score for a business,
  * aggregating the most recent signal from each of the 18 audit/service
  * modules into a category breakdown and a list of concrete recommendations
- * for any category scoring below RECOMMENDATION_THRESHOLD. */
+ * for any category scoring below RECOMMENDATION_THRESHOLD. Phase 6.1 adds
+ * explainability (trend/drivers/next-best-fix/confidence) computed at write
+ * time from this same data, with no new persisted columns. */
 export async function computeVisibilityScore(businessId: string): Promise<VisibilityScore> {
   const { data: businessRow, error: businessError } = await supabase.from("business").select("*").eq("id", businessId).single();
   if (businessError) throw businessError;
   const business = businessRow as Business;
+
+  const previous = await getLatestVisibilityScore(businessId);
 
   const signals = await fetchLatestSignals(businessId);
   const categories = await computeCategories(business, signals);
@@ -383,6 +499,8 @@ export async function computeVisibilityScore(businessId: string): Promise<Visibi
     .single();
   if (error) throw error;
 
+  const previousScore = previous?.score ?? null;
+
   return {
     id: inserted.id,
     business_id: businessId,
@@ -390,27 +508,51 @@ export async function computeVisibilityScore(businessId: string): Promise<Visibi
     categoryBreakdown,
     recommendations,
     computed_at: inserted.computed_at,
+    previousScore,
+    trend: previousScore === null ? null : score - previousScore,
+    topDrivers: rankDrivers(categoryBreakdown),
+    nextBestFix: pickNextBestFix(categories),
+    dataConfidence: buildDataConfidence(categories),
   };
 }
 
-/** Returns the most recently computed score for a business, or null if none yet. */
+/** Returns the most recently computed score for a business, or null if none
+ * yet. Phase 6.1's explainability fields are derived here too — for a
+ * persisted row, drivers/confidence are recomputed from the stored breakdown
+ * (dataConfidence defaults to "stale" per category since the underlying
+ * signals aren't re-fetched on a plain read), and trend looks at the prior
+ * row before this one. */
 export async function getLatestVisibilityScore(businessId: string): Promise<VisibilityScore | null> {
   const { data, error } = await supabase
     .from("visibility_score")
     .select("*")
     .eq("business_id", businessId)
     .order("computed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(2);
   if (error) throw error;
-  if (!data) return null;
+  if (!data || data.length === 0) return null;
+
+  const [latest, prior] = data;
+  const categoryBreakdown: Record<string, number> = latest.category_breakdown;
+  const recommendations: string[] = latest.recommendations;
+  const previousScore = prior?.score ?? null;
+
+  const dataConfidence: Record<string, DataConfidence> = {};
+  for (const category of Object.keys(categoryBreakdown)) {
+    dataConfidence[category] = "stale";
+  }
 
   return {
-    id: data.id,
+    id: latest.id,
     business_id: businessId,
-    score: data.score,
-    categoryBreakdown: data.category_breakdown,
-    recommendations: data.recommendations,
-    computed_at: data.computed_at,
+    score: latest.score,
+    categoryBreakdown,
+    recommendations,
+    computed_at: latest.computed_at,
+    previousScore,
+    trend: previousScore === null ? null : latest.score - previousScore,
+    topDrivers: rankDrivers(categoryBreakdown),
+    nextBestFix: recommendations[0] ?? null,
+    dataConfidence,
   };
 }

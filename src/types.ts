@@ -481,9 +481,26 @@ export interface LeadEvent {
   occurred_at: string;
 }
 
+/** Phase 6.1: how much real data backs a category's score — never let a
+ * category look "verified" when its underlying signal is missing or old. */
+export type DataConfidence = "verified" | "stale" | "missing";
+
+/** Phase 6.1: a single category's contribution to the overall score, ranked
+ * by how far it pulls the score from a neutral midpoint. */
+export interface ScoreDriver {
+  category: string;
+  score: number;
+  direction: "positive" | "negative";
+}
+
 /** Phase 3.2: a single 0-100 customer-facing visibility score aggregating the
  * 18 audit/service-module signals into one number with a category breakdown
- * and concrete recommended actions for any category below threshold. */
+ * and concrete recommended actions for any category below threshold.
+ *
+ * Phase 6.1 adds explainability fields (previousScore/trend/drivers/
+ * nextBestFix/dataConfidence) computed at read time from the same underlying
+ * data — none of them are persisted as new columns, so older rows in the
+ * `visibility_score` table remain readable. */
 export interface VisibilityScore {
   id: string;
   business_id: string;
@@ -491,6 +508,11 @@ export interface VisibilityScore {
   categoryBreakdown: Record<string, number>;
   recommendations: string[];
   computed_at: string;
+  previousScore: number | null;
+  trend: number | null;
+  topDrivers: ScoreDriver[];
+  nextBestFix: string | null;
+  dataConfidence: Record<string, DataConfidence>;
 }
 
 /** Phase 5.3: business-facing two-way messaging — the business's own
