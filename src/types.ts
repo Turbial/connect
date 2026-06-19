@@ -230,6 +230,31 @@ export interface Business {
   ebay_access_token: string | null;
   naverblog_id: string | null;
   naverblog_access_token: string | null;
+  boost_views_threshold: number | null;
+  boost_engagement_threshold: number | null;
+  boost_budget_cents: number | null;
+  approval_timeout_hours: number | null;
+  posting_cadence: string | null;
+  brand_voice_banned_words: string[] | null;
+}
+
+export interface PlatformConnection {
+  id: string;
+  business_id: string;
+  platform: Platform;
+  account_id: string | null;
+  account_name: string | null;
+  access_token_ref: string | null;
+  refresh_token_ref: string | null;
+  scopes: string | null;
+  status: string;
+  expires_at: string | null;
+  last_verified_at: string | null;
+  last_posted_at: string | null;
+  last_metrics_sync_at: string | null;
+  failure_reason: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export type ContentStatus = "queued" | "approved" | "posted" | "rejected" | "edited";

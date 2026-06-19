@@ -95,18 +95,45 @@ export async function getEditQueue(): Promise<EditQueueItem[]> {
   return queue;
 }
 
-/** Applies each request's configured timeout action to requests that never got a reply. */
-export async function applyTimeouts(timeoutHours: number): Promise<void> {
-  const cutoff = new Date(Date.now() - timeoutHours * 60 * 60 * 1000).toISOString();
-
-  const { data: expired, error } = await supabase
+/** Applies each request's configured timeout action to requests that never got a reply.
+ * defaultTimeoutHours applies to businesses without their own approval_timeout_hours
+ * override (Phase 2.4 adaptability setting); each request's content_item -> business_id
+ * is looked up to resolve the per-business override, since approval_request itself
+ * has no business_id column to join on directly. */
+export async function applyTimeouts(defaultTimeoutHours: number): Promise<void> {
+  const { data: pending, error } = await supabase
     .from("approval_request")
-    .select("id, content_item_id, timeout_action")
-    .is("responded_at", null)
-    .lt("sent_at", cutoff);
+    .select("id, content_item_id, timeout_action, sent_at")
+    .is("responded_at", null);
   if (error) throw error;
+  if (!pending || pending.length === 0) return;
 
-  for (const request of expired ?? []) {
+  const contentItemIds = [...new Set(pending.map((r) => r.content_item_id))];
+  const { data: items, error: itemsError } = await supabase
+    .from("content_item")
+    .select("id, business_id")
+    .in("id", contentItemIds);
+  if (itemsError) throw itemsError;
+
+  const businessIdByItem = new Map((items ?? []).map((i) => [i.id, i.business_id as string]));
+  const businessIds = [...new Set((items ?? []).map((i) => i.business_id as string))];
+
+  const { data: businesses, error: businessesError } = await supabase
+    .from("business")
+    .select("id, approval_timeout_hours")
+    .in("id", businessIds.length > 0 ? businessIds : ["00000000-0000-0000-0000-000000000000"]);
+  if (businessesError) throw businessesError;
+
+  const timeoutHoursByBusiness = new Map(
+    (businesses ?? []).map((b) => [b.id as string, (b.approval_timeout_hours as number | null) ?? defaultTimeoutHours])
+  );
+
+  for (const request of pending) {
+    const businessId = businessIdByItem.get(request.content_item_id);
+    const timeoutHours = (businessId ? timeoutHoursByBusiness.get(businessId) : undefined) ?? defaultTimeoutHours;
+    const cutoff = new Date(Date.now() - timeoutHours * 60 * 60 * 1000).toISOString();
+    if (request.sent_at >= cutoff) continue;
+
     const status = request.timeout_action === "auto_post" ? "approved" : "rejected";
     await supabase.from("content_item").update({ status }).eq("id", request.content_item_id);
     await supabase

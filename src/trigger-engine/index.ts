@@ -13,8 +13,10 @@ function pickAdPlatform(business: Business): AdPlatform | null {
   return null;
 }
 
-function meetsThreshold(post: Post): boolean {
-  return post.views >= VIEWS_THRESHOLD || post.engagement >= ENGAGEMENT_THRESHOLD;
+function meetsThreshold(business: Business, post: Post): boolean {
+  const viewsThreshold = business.boost_views_threshold ?? VIEWS_THRESHOLD;
+  const engagementThreshold = business.boost_engagement_threshold ?? ENGAGEMENT_THRESHOLD;
+  return post.views >= viewsThreshold || post.engagement >= engagementThreshold;
 }
 
 /** Scans a business's posted content for organic performance that clears the boost threshold,
@@ -44,7 +46,7 @@ export async function evaluateBoostTriggers(business: Business): Promise<void> {
   const triggeredPostIds = new Set((existingTriggers ?? []).map((t) => t.post_id));
 
   for (const post of (posts ?? []) as Post[]) {
-    if (triggeredPostIds.has(post.id) || !meetsThreshold(post)) continue;
+    if (triggeredPostIds.has(post.id) || !meetsThreshold(business, post)) continue;
 
     const { error: insertError } = await supabase
       .from("boost_trigger")

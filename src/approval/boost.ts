@@ -76,14 +76,15 @@ export async function handleBoostReply(business: Business, body: string): Promis
   const post = (posts ?? []).find((p) => p.id === trigger.post_id);
   const caption = post?.content_item?.caption ?? "";
 
+  const budgetCents = business.boost_budget_cents ?? DEFAULT_BUDGET_CENTS;
   const creative = await generateAdCreative(business, caption);
   const result =
     trigger.ad_platform === "google"
-      ? await launchGoogleCampaign(business, creative, DEFAULT_BUDGET_CENTS)
-      : await launchMetaCampaign(business, creative, DEFAULT_BUDGET_CENTS);
+      ? await launchGoogleCampaign(business, creative, budgetCents)
+      : await launchMetaCampaign(business, creative, budgetCents);
 
   await supabase
     .from("boost_trigger")
-    .update({ ad_campaign_id: result.campaignId, budget_cents: DEFAULT_BUDGET_CENTS })
+    .update({ ad_campaign_id: result.campaignId, budget_cents: budgetCents })
     .eq("id", trigger.id);
 }

@@ -229,6 +229,21 @@ async function generateVideo(business: Business, caption: string): Promise<strin
   return data.video?.url ?? null;
 }
 
+/** Strips banned brand-voice words/phrases from generated copy (Phase 2.4),
+ * matching whole words case-insensitively and collapsing any resulting
+ * double spaces. Simple removal rather than regeneration — this is a basic
+ * compliance guardrail, not a full review pass. */
+function stripBannedWords(caption: string, bannedWords: string[] | null | undefined): string {
+  if (!bannedWords || bannedWords.length === 0) return caption;
+  let result = caption;
+  for (const word of bannedWords) {
+    if (!word) continue;
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    result = result.replace(new RegExp(`\\b${escaped}\\b`, "gi"), "");
+  }
+  return result.replace(/[ \t]{2,}/g, " ").replace(/ +([,.!?])/g, "$1").trim();
+}
+
 export async function generatePost(
   business: Business,
   platform: Platform = "gbp",
@@ -237,6 +252,9 @@ export async function generatePost(
 ): Promise<GeneratedPost> {
   let caption = await generateCaption(business, platform, context, reviewRating);
   let captionVariantB = await generateCaptionVariantB(business, platform, context, reviewRating);
+
+  caption = stripBannedWords(caption, business.brand_voice_banned_words);
+  if (captionVariantB) captionVariantB = stripBannedWords(captionVariantB, business.brand_voice_banned_words);
 
   if (business.preferred_language && business.preferred_language.toLowerCase() !== "en") {
     caption = await translateCaption(caption, business.preferred_language);

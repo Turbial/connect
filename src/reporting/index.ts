@@ -2,6 +2,7 @@ import { supabase } from "../lib/supabase.js";
 import { sendApprovalEmail } from "../approval/email.js";
 import { sendApprovalSms } from "../approval/sms.js";
 import { isLivePlatform } from "../lib/platformStatus.js";
+import { getConnectionSummary } from "../lib/platformConnection.js";
 import type { Business, Post } from "../types.js";
 
 function formatWeekOf(date: Date): string {
@@ -42,12 +43,37 @@ export async function buildWeeklyReport(business: Business): Promise<string> {
     .in("post_id", typedPosts.map((p) => p.id).length > 0 ? typedPosts.map((p) => p.id) : ["00000000-0000-0000-0000-000000000000"]);
   if (boostError) throw boostError;
 
+  const { data: pendingItems, error: pendingError } = await supabase
+    .from("content_item")
+    .select("id")
+    .eq("business_id", business.id)
+    .in("status", ["queued", "approved"]);
+  if (pendingError) throw pendingError;
+
+  const { data: failures, error: failuresError } = await supabase
+    .from("distribution_failure")
+    .select("id")
+    .eq("business_id", business.id)
+    .gte("occurred_at", weekAgo);
+  if (failuresError) throw failuresError;
+
+  const connectionSummary = await getConnectionSummary(business.id);
+  const needsReconnection = connectionSummary.filter((c) => c.actionRequired);
+
   const lines = [
     `Your MightyMax Update — Week of ${formatWeekOf(new Date())}`,
-    `✅ ${typedPosts.length} post${typedPosts.length === 1 ? "" : "s"} went live`,
+    `✅ ${typedPosts.length} post${typedPosts.length === 1 ? "" : "s"} published`,
+    `🕓 ${(pendingItems ?? []).length} post${(pendingItems ?? []).length === 1 ? "" : "s"} pending`,
+    `⚠️ ${(failures ?? []).length} post${(failures ?? []).length === 1 ? "" : "s"} failed`,
     `👀 ${totalViews} views, 💬 ${totalEngagement} engagements`,
     `📞 ${totalCalls} calls came from your Google profile`,
   ];
+
+  if (needsReconnection.length > 0) {
+    lines.push(
+      `🔌 ${needsReconnection.length} platform${needsReconnection.length === 1 ? "" : "s"} need${needsReconnection.length === 1 ? "s" : ""} reconnection: ${needsReconnection.map((c) => c.platform).join(", ")}`
+    );
+  }
 
   if ((boosts ?? []).length > 0) {
     lines.push(`🚀 ${boosts!.length} post${boosts!.length === 1 ? "" : "s"} turned into paid ads this week`);

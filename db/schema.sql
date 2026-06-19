@@ -473,3 +473,40 @@ create table if not exists distribution_failure (
 );
 
 create index if not exists idx_distribution_failure_business on distribution_failure(business_id);
+
+-- ── Development Program Phase 2: Front Door & Verified Core ────────────────
+
+-- 2.1: normalized platform connections, additive alongside the existing
+-- business.<platform>_id/<platform>_access_token columns. connectedPlatforms()
+-- syncs rows here so this becomes the single source of truth for connection
+-- status going forward, without requiring a rewrite of every adapter.
+create table if not exists platform_connection (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  platform text not null,
+  account_id text,
+  account_name text,
+  access_token_ref text,
+  refresh_token_ref text,
+  scopes text,
+  status text not null default 'sandbox',
+  expires_at timestamptz,
+  last_verified_at timestamptz,
+  last_posted_at timestamptz,
+  last_metrics_sync_at timestamptz,
+  failure_reason text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create unique index if not exists idx_platform_connection_business_platform on platform_connection(business_id, platform);
+create index if not exists idx_platform_connection_business on platform_connection(business_id);
+
+-- 2.4: per-business adaptability settings that actually drive behavior
+-- (trigger thresholds, boost budget, approval timeout, brand-voice basics).
+alter table business add column if not exists boost_views_threshold integer;
+alter table business add column if not exists boost_engagement_threshold integer;
+alter table business add column if not exists boost_budget_cents integer;
+alter table business add column if not exists approval_timeout_hours integer;
+alter table business add column if not exists posting_cadence text not null default 'weekly';
+alter table business add column if not exists brand_voice_banned_words text[] not null default array[]::text[];

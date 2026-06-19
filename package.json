@@ -10,6 +10,7 @@
     "weekly": "tsx src/jobs/weeklyBatch.ts",
     "collect": "tsx src/jobs/collectPerformance.ts",
     "services": "tsx src/jobs/runServiceModules.ts",
+    "connections": "tsx src/jobs/checkConnections.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

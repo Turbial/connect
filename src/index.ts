@@ -4,6 +4,7 @@ import { supabase } from "./lib/supabase.js";
 import { handleSmsReply } from "./approval/index.js";
 import { hasPendingBoost, handleBoostReply } from "./approval/boost.js";
 import { handleReachReview } from "./reach-integration/index.js";
+import { getConnectionSummary } from "./lib/platformConnection.js";
 import type { Business } from "./types.js";
 
 async function handleSmsWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -62,6 +63,11 @@ async function handleReachWebhook(req: http.IncomingMessage, res: http.ServerRes
   res.writeHead(200).end();
 }
 
+async function handleConnectionsRoute(req: http.IncomingMessage, res: http.ServerResponse, businessId: string) {
+  const summary = await getConnectionSummary(businessId);
+  res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(summary));
+}
+
 /** Webhook receiver for inbound Twilio SMS replies and Reach review events. */
 const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/webhooks/sms") {
@@ -70,6 +76,11 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "POST" && req.url === "/webhooks/reach-review") {
     await handleReachWebhook(req, res);
+    return;
+  }
+  const connectionsMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/connections$/);
+  if (connectionsMatch) {
+    await handleConnectionsRoute(req, res, connectionsMatch[1]);
     return;
   }
   res.writeHead(404).end();
