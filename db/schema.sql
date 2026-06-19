@@ -559,3 +559,62 @@ create index if not exists idx_visibility_score_business on visibility_score(bus
 -- live until the owner approves it — content_item.caption is only overwritten
 -- on that second YES (see src/approval/index.ts draftEditRewrite/applyEditRewrite).
 alter table approval_request add column if not exists proposed_rewrite text;
+
+-- ── Development Program Phase 4: Adaptability at Scale ──────────────────────
+
+-- 4.1: organization sits above business (a business with no organization_id
+-- behaves exactly as today — an implicit "org of one", not a row that needs
+-- backfilling). white_label_name, when set, replaces "MightyMax" in owner-
+-- facing message copy (see src/lib/orgSettings.ts orgDisplayName()). The
+-- setting-default columns mirror Phase 2.4's business-level columns exactly,
+-- providing an org-level fallback resolved by src/lib/orgSettings.ts before
+-- the hardcoded constants.
+create table if not exists organization (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  white_label_name text,
+  boost_views_threshold integer,
+  boost_engagement_threshold integer,
+  boost_budget_cents integer,
+  approval_timeout_hours integer,
+  posting_cadence text,
+  brand_voice_banned_words text[],
+  content_paused boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table business add column if not exists organization_id uuid references organization(id) on delete set null;
+create index if not exists idx_business_organization on business(organization_id);
+
+-- 4.2: optional hierarchical approval chain. Zero rows for an organization
+-- means no chain — requestApproval/handleSmsReply fall back to the existing
+-- single-owner SMS YES/NO flow unchanged.
+create table if not exists approval_chain_step (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organization(id) on delete cascade,
+  step_order integer not null,
+  name text not null,
+  phone text,
+  email text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_approval_chain_step_organization on approval_chain_step(organization_id, step_order);
+
+-- Tracks which chain step a request is currently awaiting a YES from. Null
+-- for non-chain requests (today's behavior, unaffected).
+alter table approval_request add column if not exists chain_step_index integer;
+
+-- 4.2: pre-approved content library — items here skip requestApproval
+-- entirely (source = 'library') since they're pre-approved by definition.
+create table if not exists content_library_item (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organization(id) on delete cascade,
+  caption text not null,
+  media_url text,
+  media_type text not null default 'image',
+  platforms text[] not null default array[]::text[],
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_content_library_item_organization on content_library_item(organization_id);

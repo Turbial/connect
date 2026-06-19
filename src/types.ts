@@ -237,6 +237,50 @@ export interface Business {
   posting_cadence: string | null;
   brand_voice_banned_words: string[] | null;
   website_url: string | null;
+  organization_id: string | null;
+}
+
+/** Phase 4.1: sits above business — a business with no organization_id
+ * behaves exactly as today (an implicit "org of one"). The setting-default
+ * columns mirror the Phase 2.4 business-level columns and are resolved as a
+ * fallback by src/lib/orgSettings.ts before the hardcoded constants. */
+export interface Organization {
+  id: string;
+  name: string;
+  white_label_name: string | null;
+  boost_views_threshold: number | null;
+  boost_engagement_threshold: number | null;
+  boost_budget_cents: number | null;
+  approval_timeout_hours: number | null;
+  posting_cadence: string | null;
+  brand_voice_banned_words: string[] | null;
+  content_paused: boolean;
+  created_at: string;
+}
+
+/** Phase 4.2: one optional step in an org's approval chain (local manager ->
+ * regional manager -> brand compliance, etc). Zero rows for an org means no
+ * chain configured. */
+export interface ApprovalChainStep {
+  id: string;
+  organization_id: string;
+  step_order: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  created_at: string;
+}
+
+/** Phase 4.2: a reusable, pre-approved snippet an org can queue directly
+ * (source: "library") without going through owner approval. */
+export interface ContentLibraryItem {
+  id: string;
+  organization_id: string;
+  caption: string;
+  media_url: string | null;
+  media_type: MediaType;
+  platforms: Platform[];
+  created_at: string;
 }
 
 export interface PlatformConnection {
@@ -259,7 +303,7 @@ export interface PlatformConnection {
 }
 
 export type ContentStatus = "queued" | "approved" | "posted" | "rejected" | "edited";
-export type ContentSource = "content_engine" | "manual" | "review_triggered";
+export type ContentSource = "content_engine" | "manual" | "review_triggered" | "library";
 
 export interface ContentItem {
   id: string;
@@ -284,6 +328,7 @@ export interface ApprovalRequest {
   responded_at: string | null;
   timeout_action: "auto_post" | "hold";
   proposed_rewrite: string | null;
+  chain_step_index: number | null;
 }
 
 export interface Post {

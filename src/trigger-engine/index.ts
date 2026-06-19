@@ -1,7 +1,8 @@
 import { supabase } from "../lib/supabase.js";
 import { sendApprovalSms } from "../approval/sms.js";
 import { sendApprovalEmail } from "../approval/email.js";
-import type { AdPlatform, Business, Post } from "../types.js";
+import { getOrganizationForBusiness, orgDisplayName, resolveBusinessSetting } from "../lib/orgSettings.js";
+import type { AdPlatform, Business, Organization, Post } from "../types.js";
 
 /** A post earns a boost prompt once it clears either threshold and has no existing boost_trigger. */
 const VIEWS_THRESHOLD = 500;
@@ -13,9 +14,9 @@ function pickAdPlatform(business: Business): AdPlatform | null {
   return null;
 }
 
-function meetsThreshold(business: Business, post: Post): boolean {
-  const viewsThreshold = business.boost_views_threshold ?? VIEWS_THRESHOLD;
-  const engagementThreshold = business.boost_engagement_threshold ?? ENGAGEMENT_THRESHOLD;
+function meetsThreshold(business: Business, organization: Organization | null, post: Post): boolean {
+  const viewsThreshold = resolveBusinessSetting(business, organization, "boost_views_threshold", VIEWS_THRESHOLD);
+  const engagementThreshold = resolveBusinessSetting(business, organization, "boost_engagement_threshold", ENGAGEMENT_THRESHOLD);
   return post.views >= viewsThreshold || post.engagement >= engagementThreshold;
 }
 
@@ -24,6 +25,8 @@ function meetsThreshold(business: Business, post: Post): boolean {
 export async function evaluateBoostTriggers(business: Business): Promise<void> {
   const adPlatform = pickAdPlatform(business);
   if (!adPlatform) return;
+
+  const organization = await getOrganizationForBusiness(business);
 
   const { data: itemIds, error: itemsError } = await supabase
     .from("content_item")
@@ -46,7 +49,7 @@ export async function evaluateBoostTriggers(business: Business): Promise<void> {
   const triggeredPostIds = new Set((existingTriggers ?? []).map((t) => t.post_id));
 
   for (const post of (posts ?? []) as Post[]) {
-    if (triggeredPostIds.has(post.id) || !meetsThreshold(business, post)) continue;
+    if (triggeredPostIds.has(post.id) || !meetsThreshold(business, organization, post)) continue;
 
     const { error: insertError } = await supabase
       .from("boost_trigger")
@@ -62,7 +65,7 @@ export async function evaluateBoostTriggers(business: Business): Promise<void> {
     if (business.owner_phone) {
       await sendApprovalSms(business.owner_phone, message);
     } else if (business.owner_email) {
-      await sendApprovalEmail(business.owner_email, "Boost this post?", message);
+      await sendApprovalEmail(business.owner_email, `Boost this post? — ${orgDisplayName(organization)}`, message);
     }
   }
 }

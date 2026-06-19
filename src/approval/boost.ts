@@ -2,6 +2,7 @@ import { supabase } from "../lib/supabase.js";
 import { generateAdCreative } from "../ads/creative.js";
 import { launchMetaCampaign } from "../ads/metaAds.js";
 import { launchGoogleCampaign } from "../ads/googleAds.js";
+import { getOrganizationForBusiness, resolveBusinessSetting } from "../lib/orgSettings.js";
 import type { Business, BoostTrigger, Post } from "../types.js";
 
 /** Default boost spend until businesses can configure their own budget. */
@@ -101,7 +102,8 @@ export async function handleBoostReply(business: Business, body: string): Promis
   const post = (posts ?? []).find((p) => p.id === trigger.post_id);
   const caption = post?.content_item?.caption ?? "";
 
-  const defaultBudgetCents = business.boost_budget_cents ?? DEFAULT_BUDGET_CENTS;
+  const organization = await getOrganizationForBusiness(business);
+  const defaultBudgetCents = resolveBusinessSetting(business, organization, "boost_budget_cents", DEFAULT_BUDGET_CENTS);
   const budgetCents = requestedBudgetCents ? clampBudget(requestedBudgetCents, defaultBudgetCents) : defaultBudgetCents;
   const creative = await generateAdCreative(business, caption);
   const result =

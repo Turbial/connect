@@ -2,7 +2,8 @@ import { supabase } from "../lib/supabase.js";
 import { generatePost, generateTrendingIdea } from "./generate.js";
 import { getConnection, upsertConnection } from "../lib/platformConnection.js";
 import { statusOf } from "../lib/platformStatus.js";
-import type { Business, Platform } from "../types.js";
+import { getOrganizationForBusiness } from "../lib/orgSettings.js";
+import type { Business, ContentLibraryItem, Platform } from "../types.js";
 
 /** The business-column value that identifies a connected account per platform,
  * used to sync platform_connection rows (Phase 2.1) without requiring every
@@ -386,6 +387,11 @@ export function connectedPlatforms(business: Business): Platform[] {
  * connected platform per idea, with platform-tailored copy (Phase 2).
  */
 export async function queueWeeklyContent(business: Business, count = 3): Promise<void> {
+  // Phase 4.2: an org's emergency content pause skips the business entirely
+  // (no-op, not a throw) so a paused brand doesn't keep generating content.
+  const organization = await getOrganizationForBusiness(business);
+  if (organization?.content_paused) return;
+
   const platforms = connectedPlatforms(business);
   await syncPlatformConnections(business, platforms);
   const trendingIdea = (await generateTrendingIdea(business)) ?? undefined;
@@ -440,4 +446,28 @@ export async function queueReviewTriggeredContent(
 
     if (error) throw error;
   }
+}
+
+/** Phase 4.2: queues a pre-approved content library item directly as
+ * status "approved", skipping requestApproval entirely — library items are
+ * pre-approved by definition, so there's no owner-approval gate to clear. */
+export async function queueFromLibrary(business: Business, libraryItemId: string): Promise<void> {
+  const { data: libraryItem, error } = await supabase
+    .from("content_library_item")
+    .select("*")
+    .eq("id", libraryItemId)
+    .single();
+  if (error) throw error;
+  const item = libraryItem as ContentLibraryItem;
+
+  const { error: insertError } = await supabase.from("content_item").insert({
+    business_id: business.id,
+    source: "library",
+    caption: item.caption,
+    media_url: item.media_url,
+    media_type: item.media_type,
+    platforms: item.platforms,
+    status: "approved",
+  });
+  if (insertError) throw insertError;
 }

@@ -1,3 +1,4 @@
+import { getOrganizationForBusiness } from "../lib/orgSettings.js";
 import type { Business, GeneratedPost, MediaType, Platform } from "../types.js";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
@@ -260,8 +261,14 @@ export async function generatePost(
   let caption = await generateCaption(business, platform, context, reviewRating);
   let captionVariantB = await generateCaptionVariantB(business, platform, context, reviewRating);
 
-  caption = stripBannedWords(caption, business.brand_voice_banned_words);
-  if (captionVariantB) captionVariantB = stripBannedWords(captionVariantB, business.brand_voice_banned_words);
+  // Phase 4.1: union business-level banned words with the business's org-level
+  // defaults (if any) — banned words are a safety guardrail, so an org default
+  // should add to a business's own list rather than be overridden by it.
+  const organization = await getOrganizationForBusiness(business);
+  const bannedWords = [...(business.brand_voice_banned_words ?? []), ...(organization?.brand_voice_banned_words ?? [])];
+
+  caption = stripBannedWords(caption, bannedWords);
+  if (captionVariantB) captionVariantB = stripBannedWords(captionVariantB, bannedWords);
 
   if (business.preferred_language && business.preferred_language.toLowerCase() !== "en") {
     caption = await translateCaption(caption, business.preferred_language);

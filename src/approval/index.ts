@@ -2,60 +2,180 @@ import { supabase } from "../lib/supabase.js";
 import { sendApprovalSms, parseReply } from "./sms.js";
 import { sendApprovalEmail } from "./email.js";
 import { callDeepSeekPrompt } from "../content-engine/generate.js";
-import type { Business, ContentItem } from "../types.js";
+import { getOrganizationForBusiness, orgDisplayName, resolveBusinessSetting } from "../lib/orgSettings.js";
+import type { ApprovalChainStep, Business, ContentItem, Organization } from "../types.js";
 
-function buildMessage(business: Business, items: ContentItem[]): string {
+function buildMessage(business: Business, items: ContentItem[], displayName: string): string {
   const lines = items.map((item, i) => `${i + 1}. "${item.caption.slice(0, 100)}"`);
   return [
-    `Your weekly posts are ready for ${business.name}:`,
+    `Your weekly ${displayName} posts are ready for ${business.name}:`,
     ...lines,
     "Reply YES to post all, NO to skip this week, or EDIT to make changes.",
   ].join("\n");
 }
 
-/** Sends the weekly approval request for a business's queued content items. */
+/** Phase 4.2: ordered approval chain for an org, empty when no chain is
+ * configured — callers fall back to the existing single-owner flow. */
+async function getChainSteps(organizationId: string): Promise<ApprovalChainStep[]> {
+  const { data, error } = await supabase
+    .from("approval_chain_step")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .order("step_order", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as ApprovalChainStep[];
+}
+
+/** Sends a chain step's approval request via its phone/email, in addition to
+ * the business owner (kept for traceability — the owner stays in the loop
+ * even once brand/regional approval is required, rather than being dropped
+ * from the conversation). */
+async function sendToStep(step: ApprovalChainStep, message: string): Promise<void> {
+  if (step.phone) {
+    await sendApprovalSms(step.phone, message);
+  } else if (step.email) {
+    await sendApprovalEmail(step.email, "Approval needed", message);
+  }
+}
+
+/** Sends the weekly approval request for a business's queued content items.
+ * Phase 4.2: an org's emergency content pause skips the business entirely
+ * (no-op, not an error) so a paused brand doesn't keep nagging an owner.
+ * Phase 4.2: when the business's org has a configured approval chain, the
+ * request also goes to the first step's phone/email (additionally, not
+ * instead of, the owner — see sendToStep) and chain_step_index is set to 0
+ * so handleSmsReply knows to walk the chain instead of finalizing on the
+ * owner's reply alone. */
 export async function requestApproval(business: Business, items: ContentItem[]): Promise<void> {
   if (items.length === 0) return;
-  const message = buildMessage(business, items);
+
+  const organization = await getOrganizationForBusiness(business);
+  if (organization?.content_paused) return;
+
+  const displayName = orgDisplayName(organization);
+  const message = buildMessage(business, items, displayName);
 
   const channel = business.owner_phone ? "sms" : "email";
   if (channel === "sms") {
     await sendApprovalSms(business.owner_phone!, message);
   } else if (business.owner_email) {
-    await sendApprovalEmail(business.owner_email, "Your MightyMax posts are ready", message);
+    await sendApprovalEmail(business.owner_email, `Your ${displayName} posts are ready`, message);
   } else {
     throw new Error(`Business ${business.id} has no owner_phone or owner_email`);
   }
+
+  const chainSteps = organization ? await getChainSteps(organization.id) : [];
+  const firstStep = chainSteps[0];
+  if (firstStep) await sendToStep(firstStep, message);
 
   for (const item of items) {
     const { error } = await supabase.from("approval_request").insert({
       content_item_id: item.id,
       channel,
       timeout_action: "hold",
+      chain_step_index: firstStep ? 0 : null,
     });
     if (error) throw error;
   }
 }
 
-/** Handles an inbound SMS reply, updating all pending content items for that business. */
+/** Finalizes approval (matching today's full-approval path) for all queued
+ * content items belonging to this business. */
+async function finalizeApproval(businessId: string, body: string, queuedItemIds: string[]): Promise<void> {
+  for (const itemId of queuedItemIds) {
+    await supabase.from("content_item").update({ status: "approved" }).eq("id", itemId);
+    await supabase
+      .from("approval_request")
+      .update({ response: body, responded_at: new Date().toISOString() })
+      .eq("content_item_id", itemId)
+      .is("responded_at", null);
+  }
+}
+
+/** Phase 4.2: advances a chain to the next step (sending that step the
+ * approval request and bumping chain_step_index), or finalizes approval if
+ * the step that just replied YES was the last one in the chain. */
+async function advanceChain(
+  business: Business,
+  organization: Organization,
+  body: string,
+  queuedItemIds: string[]
+): Promise<void> {
+  const { data: pendingRequests, error } = await supabase
+    .from("approval_request")
+    .select("id, chain_step_index")
+    .in("content_item_id", queuedItemIds)
+    .is("responded_at", null);
+  if (error) throw error;
+
+  const currentIndex = (pendingRequests ?? [])[0]?.chain_step_index as number | null | undefined;
+  if (currentIndex === null || currentIndex === undefined) {
+    await finalizeApproval(business.id, body, queuedItemIds);
+    return;
+  }
+
+  const steps = await getChainSteps(organization.id);
+  const nextIndex = currentIndex + 1;
+  const nextStep = steps[nextIndex];
+
+  if (!nextStep) {
+    await finalizeApproval(business.id, body, queuedItemIds);
+    return;
+  }
+
+  const { data: items } = await supabase.from("content_item").select("caption").in("id", queuedItemIds);
+  const message = buildMessage(
+    business,
+    (items ?? []).map((i) => ({ caption: i.caption }) as ContentItem),
+    orgDisplayName(organization)
+  );
+  await sendToStep(nextStep, message);
+
+  for (const requestId of (pendingRequests ?? []).map((r) => r.id)) {
+    await supabase.from("approval_request").update({ chain_step_index: nextIndex }).eq("id", requestId);
+  }
+}
+
+/** Handles an inbound SMS reply, updating all pending content items for that business.
+ * Phase 4.2: when the business's org has a configured chain and the reply is
+ * a YES, the chain advances to the next step (or finalizes after the last
+ * step) instead of resolving immediately — NO/EDIT still resolve immediately
+ * as rejection/edit, matching today's semantics unchanged. */
 export async function handleSmsReply(businessId: string, body: string): Promise<void> {
   const decision = parseReply(body);
 
   const { data: queuedItems, error: queryError } = await supabase
     .from("content_item")
-    .select("id")
+    .select("id, business_id")
     .eq("business_id", businessId)
     .eq("status", "queued");
   if (queryError) throw queryError;
+  const queuedItemIds = (queuedItems ?? []).map((i) => i.id);
+  if (queuedItemIds.length === 0) return;
 
-  const newStatus = decision === "approve" ? "approved" : decision === "reject" ? "rejected" : "edited";
+  if (decision === "approve") {
+    const { data: business, error: businessError } = await supabase.from("business").select("*").eq("id", businessId).single();
+    if (businessError) throw businessError;
+    const organization = await getOrganizationForBusiness(business as Business);
 
-  for (const item of queuedItems ?? []) {
-    await supabase.from("content_item").update({ status: newStatus }).eq("id", item.id);
+    if (organization) {
+      const steps = await getChainSteps(organization.id);
+      if (steps.length > 0) {
+        await advanceChain(business as Business, organization, body, queuedItemIds);
+        return;
+      }
+    }
+    await finalizeApproval(businessId, body, queuedItemIds);
+    return;
+  }
+
+  const newStatus = decision === "reject" ? "rejected" : "edited";
+  for (const itemId of queuedItemIds) {
+    await supabase.from("content_item").update({ status: newStatus }).eq("id", itemId);
     await supabase
       .from("approval_request")
       .update({ response: body, responded_at: new Date().toISOString() })
-      .eq("content_item_id", item.id)
+      .eq("content_item_id", itemId)
       .is("responded_at", null);
   }
 }
@@ -215,12 +335,27 @@ export async function applyTimeouts(defaultTimeoutHours: number): Promise<void> 
 
   const { data: businesses, error: businessesError } = await supabase
     .from("business")
-    .select("id, approval_timeout_hours")
+    .select("id, approval_timeout_hours, organization_id")
     .in("id", businessIds.length > 0 ? businessIds : ["00000000-0000-0000-0000-000000000000"]);
   if (businessesError) throw businessesError;
 
+  // Phase 4.1: resolve the org-level approval_timeout_hours default for
+  // businesses with no business-level override, before falling back to
+  // defaultTimeoutHours.
+  const organizationIds = [...new Set((businesses ?? []).map((b) => b.organization_id as string | null).filter((id): id is string => !!id))];
+  const { data: organizations, error: organizationsError } =
+    organizationIds.length > 0
+      ? await supabase.from("organization").select("id, approval_timeout_hours").in("id", organizationIds)
+      : { data: [], error: null };
+  if (organizationsError) throw organizationsError;
+  const timeoutHoursByOrganization = new Map((organizations ?? []).map((o) => [o.id as string, o.approval_timeout_hours as number | null]));
+
   const timeoutHoursByBusiness = new Map(
-    (businesses ?? []).map((b) => [b.id as string, (b.approval_timeout_hours as number | null) ?? defaultTimeoutHours])
+    (businesses ?? []).map((b) => {
+      const orgId = b.organization_id as string | null;
+      const orgDefault = orgId ? timeoutHoursByOrganization.get(orgId) : null;
+      return [b.id as string, (b.approval_timeout_hours as number | null) ?? orgDefault ?? defaultTimeoutHours];
+    })
   );
 
   for (const request of pending) {

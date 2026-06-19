@@ -4,15 +4,32 @@ import { sendApprovalSms } from "../approval/sms.js";
 import { isLivePlatform } from "../lib/platformStatus.js";
 import { getConnectionSummary } from "../lib/platformConnection.js";
 import { getLeadEventsForBusiness } from "../lib/leadEvents.js";
-import type { Business, DistributionFailure, Post } from "../types.js";
+import { getOrganizationForBusiness, orgDisplayName } from "../lib/orgSettings.js";
+import type { Business, DistributionFailure, Organization, Post } from "../types.js";
 
 function formatWeekOf(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "long", day: "numeric" });
 }
 
-export async function buildWeeklyReport(business: Business): Promise<string> {
-  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+interface WeeklyReportData {
+  publishedCount: number;
+  pendingCount: number;
+  failedCount: number;
+  totalViews: number;
+  totalEngagement: number;
+  totalCalls: number;
+  boostedCount: number;
+  needsReconnection: { platform: string }[];
+  recurringFailurePlatforms: [string, number][];
+  leadCount: number;
+  attributedRevenueCents: number;
+}
 
+/** Fetches the raw per-business counts a weekly report is built from,
+ * reused by both the single-business report (buildWeeklyReport) and the
+ * org-level rollup (buildOrgWeeklyReport) so the query logic isn't
+ * duplicated across the two. */
+async function fetchWeeklyReportData(business: Business, weekAgo: string): Promise<WeeklyReportData> {
   const { data: items, error } = await supabase
     .from("content_item")
     .select("id")
@@ -77,32 +94,52 @@ export async function buildWeeklyReport(business: Business): Promise<string> {
   const leadEvents = await getLeadEventsForBusiness(business.id, weekAgo);
   const attributedRevenueCents = leadEvents.reduce((sum, e) => sum + (e.amount_cents ?? 0), 0);
 
+  return {
+    publishedCount: typedPosts.length,
+    pendingCount: (pendingItems ?? []).length,
+    failedCount: (failures ?? []).length,
+    totalViews,
+    totalEngagement,
+    totalCalls,
+    boostedCount: (boosts ?? []).length,
+    needsReconnection,
+    recurringFailurePlatforms,
+    leadCount: leadEvents.length,
+    attributedRevenueCents,
+  };
+}
+
+export async function buildWeeklyReport(business: Business): Promise<string> {
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const data = await fetchWeeklyReportData(business, weekAgo);
+  const organization = await getOrganizationForBusiness(business);
+
   const lines = [
-    `Your MightyMax Update — Week of ${formatWeekOf(new Date())}`,
-    `✅ ${typedPosts.length} post${typedPosts.length === 1 ? "" : "s"} published`,
-    `🕓 ${(pendingItems ?? []).length} post${(pendingItems ?? []).length === 1 ? "" : "s"} pending`,
-    `⚠️ ${(failures ?? []).length} post${(failures ?? []).length === 1 ? "" : "s"} failed`,
-    `👀 ${totalViews} views, 💬 ${totalEngagement} engagements`,
-    `📞 ${totalCalls} calls came from your Google profile`,
+    `Your ${orgDisplayName(organization)} Update — Week of ${formatWeekOf(new Date())}`,
+    `✅ ${data.publishedCount} post${data.publishedCount === 1 ? "" : "s"} published`,
+    `🕓 ${data.pendingCount} post${data.pendingCount === 1 ? "" : "s"} pending`,
+    `⚠️ ${data.failedCount} post${data.failedCount === 1 ? "" : "s"} failed`,
+    `👀 ${data.totalViews} views, 💬 ${data.totalEngagement} engagements`,
+    `📞 ${data.totalCalls} calls came from your Google profile`,
   ];
 
-  if (needsReconnection.length > 0) {
+  if (data.needsReconnection.length > 0) {
     lines.push(
-      `🔌 ${needsReconnection.length} platform${needsReconnection.length === 1 ? "" : "s"} need${needsReconnection.length === 1 ? "s" : ""} reconnection: ${needsReconnection.map((c) => c.platform).join(", ")}`
+      `🔌 ${data.needsReconnection.length} platform${data.needsReconnection.length === 1 ? "" : "s"} need${data.needsReconnection.length === 1 ? "s" : ""} reconnection: ${data.needsReconnection.map((c) => c.platform).join(", ")}`
     );
   }
 
-  for (const [platform, count] of recurringFailurePlatforms) {
+  for (const [platform, count] of data.recurringFailurePlatforms) {
     lines.push(`⚠️ Repeated failures on ${platform} (${count}x this week) — check your connection.`);
   }
 
-  if ((boosts ?? []).length > 0) {
-    lines.push(`🚀 ${boosts!.length} post${boosts!.length === 1 ? "" : "s"} turned into paid ads this week`);
+  if (data.boostedCount > 0) {
+    lines.push(`🚀 ${data.boostedCount} post${data.boostedCount === 1 ? "" : "s"} turned into paid ads this week`);
   }
 
-  if (leadEvents.length > 0) {
-    const revenueLine = attributedRevenueCents > 0 ? `$${(attributedRevenueCents / 100).toFixed(2)} attributed revenue, ` : "";
-    lines.push(`💰 ${revenueLine}${leadEvents.length} lead${leadEvents.length === 1 ? "" : "s"} this week`);
+  if (data.leadCount > 0) {
+    const revenueLine = data.attributedRevenueCents > 0 ? `$${(data.attributedRevenueCents / 100).toFixed(2)} attributed revenue, ` : "";
+    lines.push(`💰 ${revenueLine}${data.leadCount} lead${data.leadCount === 1 ? "" : "s"} this week`);
   }
 
   return lines.join("\n");
@@ -114,6 +151,58 @@ export async function sendWeeklyReport(business: Business): Promise<void> {
   if (business.owner_phone) {
     await sendApprovalSms(business.owner_phone, report);
   } else if (business.owner_email) {
-    await sendApprovalEmail(business.owner_email, "Your MightyMax Weekly Update", report);
+    const organization = await getOrganizationForBusiness(business);
+    await sendApprovalEmail(business.owner_email, `Your ${orgDisplayName(organization)} Weekly Update`, report);
   }
+}
+
+/** Phase 4.3: consolidated org-level rollup of every business's weekly
+ * counts, plus a per-location benchmarking line (published-post count and
+ * total views, sorted highest first) for bulk reporting across an org's
+ * locations. */
+export async function buildOrgWeeklyReport(organizationId: string): Promise<string> {
+  const { data: organization, error: organizationError } = await supabase
+    .from("organization")
+    .select("*")
+    .eq("id", organizationId)
+    .single();
+  if (organizationError) throw organizationError;
+
+  const { data: businesses, error: businessesError } = await supabase
+    .from("business")
+    .select("*")
+    .eq("organization_id", organizationId);
+  if (businessesError) throw businessesError;
+
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  let publishedCount = 0;
+  let pendingCount = 0;
+  let failedCount = 0;
+  let leadCount = 0;
+  const benchmark: { name: string; published: number; views: number }[] = [];
+
+  for (const business of (businesses ?? []) as Business[]) {
+    const data = await fetchWeeklyReportData(business, weekAgo);
+    publishedCount += data.publishedCount;
+    pendingCount += data.pendingCount;
+    failedCount += data.failedCount;
+    leadCount += data.leadCount;
+    benchmark.push({ name: business.name, published: data.publishedCount, views: data.totalViews });
+  }
+
+  benchmark.sort((a, b) => b.views - a.views);
+
+  const lines = [
+    `${orgDisplayName(organization as Organization)} Org Update — Week of ${formatWeekOf(new Date())} — ${(businesses ?? []).length} location${(businesses ?? []).length === 1 ? "" : "s"}`,
+    `✅ ${publishedCount} post${publishedCount === 1 ? "" : "s"} published across all locations`,
+    `🕓 ${pendingCount} post${pendingCount === 1 ? "" : "s"} pending`,
+    `⚠️ ${failedCount} post${failedCount === 1 ? "" : "s"} failed`,
+    `💰 ${leadCount} lead${leadCount === 1 ? "" : "s"} this week`,
+    "",
+    "Per-location benchmark (by views):",
+    ...benchmark.map((b, i) => `${i + 1}. ${b.name} — ${b.published} published, ${b.views} views`),
+  ];
+
+  return lines.join("\n");
 }
