@@ -380,3 +380,12 @@ export interface ServiceSignal {
   value: string | null;
   captured_at: string;
 }
+
+export interface DistributionFailure {
+  id: string;
+  business_id: string;
+  content_item_id: string;
+  platform: Platform;
+  error: string;
+  occurred_at: string;
+}

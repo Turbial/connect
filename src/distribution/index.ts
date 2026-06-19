@@ -36,6 +36,7 @@ import { postToTrustpilot } from "./trustpilot.js";
 import { postToYandex } from "./yandex.js";
 import { genericAdapters } from "./genericAdapter.js";
 import { isLivePlatform } from "../lib/platformStatus.js";
+import { withRetry } from "../lib/retry.js";
 import type { Business, ContentItem, Platform } from "../types.js";
 
 async function postToPlatform(business: Business, item: ContentItem, platform: Platform) {
@@ -97,17 +98,34 @@ export async function postApprovedContent(business: Business): Promise<void> {
         continue;
       }
 
-      const result = await postToPlatform(business, item, platform);
+      try {
+        const result = await withRetry(() => postToPlatform(business, item, platform));
 
-      const { error: postError } = await supabase.from("post").insert({
-        content_item_id: item.id,
-        platform,
-        platform_post_id: result.platformPostId,
-        posted_at: new Date().toISOString(),
-        impressions: 0,
-        shares: 0,
-      });
-      if (postError) throw postError;
+        // Idempotent on (content_item_id, platform): a retried dispatch for
+        // an item that already posted to this platform is a no-op, not a
+        // duplicate live post.
+        const { error: postError } = await supabase
+          .from("post")
+          .upsert(
+            {
+              content_item_id: item.id,
+              platform,
+              platform_post_id: result.platformPostId,
+              posted_at: new Date().toISOString(),
+              impressions: 0,
+              shares: 0,
+            },
+            { onConflict: "content_item_id,platform", ignoreDuplicates: true }
+          );
+        if (postError) throw postError;
+      } catch (err) {
+        await supabase.from("distribution_failure").insert({
+          business_id: business.id,
+          content_item_id: item.id,
+          platform,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     await supabase.from("content_item").update({ status: "posted" }).eq("id", item.id);

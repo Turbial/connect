@@ -59,6 +59,42 @@ export async function handleSmsReply(businessId: string, body: string): Promise<
   }
 }
 
+export interface EditQueueItem {
+  contentItemId: string;
+  businessId: string;
+  caption: string;
+  requestedChange: string | null;
+}
+
+/** Content items an owner replied EDIT to, paired with what they asked for
+ * (the raw reply text), so an EDIT never just disappears into the database
+ * with no concrete next action. */
+export async function getEditQueue(): Promise<EditQueueItem[]> {
+  const { data: items, error } = await supabase
+    .from("content_item")
+    .select("id, business_id, caption")
+    .eq("status", "edited");
+  if (error) throw error;
+
+  const queue: EditQueueItem[] = [];
+  for (const item of items ?? []) {
+    const { data: request } = await supabase
+      .from("approval_request")
+      .select("response")
+      .eq("content_item_id", item.id)
+      .order("responded_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    queue.push({
+      contentItemId: item.id,
+      businessId: item.business_id,
+      caption: item.caption,
+      requestedChange: request?.response ?? null,
+    });
+  }
+  return queue;
+}
+
 /** Applies each request's configured timeout action to requests that never got a reply. */
 export async function applyTimeouts(timeoutHours: number): Promise<void> {
   const cutoff = new Date(Date.now() - timeoutHours * 60 * 60 * 1000).toISOString();

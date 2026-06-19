@@ -455,3 +455,21 @@ create table if not exists service_signal (
 
 create index if not exists idx_service_signal_business on service_signal(business_id);
 create index if not exists idx_service_signal_module on service_signal(module);
+
+-- ── Development Program Phase 1.3/1.4: reliability primitives ──────────────
+-- Idempotency: prevent duplicate live posts to the same platform for the
+-- same content item if a dispatch is retried after a partial failure.
+create unique index if not exists idx_post_unique_item_platform on post(content_item_id, platform);
+
+-- Structured, queryable failure logging for distribution dispatch, instead
+-- of errors only being thrown/swallowed.
+create table if not exists distribution_failure (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  content_item_id uuid not null references content_item(id) on delete cascade,
+  platform text not null,
+  error text not null,
+  occurred_at timestamptz not null default now()
+);
+
+create index if not exists idx_distribution_failure_business on distribution_failure(business_id);
