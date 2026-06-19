@@ -238,7 +238,23 @@ export interface Business {
   brand_voice_banned_words: string[] | null;
   website_url: string | null;
   organization_id: string | null;
+  service_area: string | null;
+  owner_mobile: string | null;
+  owner_preferred_channel: PreferredChannel | null;
+  services_offered: string[] | null;
+  brand_tone: string | null;
+  brand_voice_banned_claims: string[] | null;
+  logo_url: string | null;
+  photo_urls: string[] | null;
+  target_locations: string[] | null;
+  compliance_restrictions: string[] | null;
 }
+
+/** Phase 6.2: the channel the owner has said they want to be reached on for
+ * approvals/digests — sms is the only one with a working transport today
+ * (Phase 7.1 adds whatsapp); email already exists as a delivery option via
+ * the weekly digest. */
+export type PreferredChannel = "sms" | "email" | "whatsapp";
 
 /** Phase 4.1: sits above business — a business with no organization_id
  * behaves exactly as today (an implicit "org of one"). The setting-default
