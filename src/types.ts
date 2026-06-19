@@ -248,6 +248,7 @@ export interface Business {
   photo_urls: string[] | null;
   target_locations: string[] | null;
   compliance_restrictions: string[] | null;
+  vertical: Vertical | null;
 }
 
 /** Phase 6.2: the channel the owner has said they want to be reached on for
@@ -255,6 +256,12 @@ export interface Business {
  * (Phase 7.1 adds whatsapp); email already exists as a delivery option via
  * the weekly digest. */
 export type PreferredChannel = "sms" | "email" | "whatsapp";
+
+/** Phase 6.3: a business's named industry vertical, used to pick a score
+ * weight table and audit-report copy. Defaults to "general" — no forced
+ * re-categorization of existing rows, and "general" keeps today's implicit
+ * equal weighting. */
+export type Vertical = "home_services" | "restaurant" | "wellness" | "general";
 
 /** Phase 4.1: sits above business — a business with no organization_id
  * behaves exactly as today (an implicit "org of one"). The setting-default
@@ -529,6 +536,13 @@ export interface VisibilityScore {
   topDrivers: ScoreDriver[];
   nextBestFix: string | null;
   dataConfidence: Record<string, DataConfidence>;
+  /** Phase 6.3: the vertical whose weight table produced `score` — "general"
+   * for a business with no vertical set, identical to pre-6.3 behavior. */
+  vertical: Vertical;
+  /** Phase 6.3: vertical-tailored framing sentence for the audit report,
+   * null for verticals without tuned copy yet (never a generic claim
+   * dressed up as vertical-specific insight). */
+  industryInsight: string | null;
 }
 
 /** Phase 5.3: business-facing two-way messaging — the business's own

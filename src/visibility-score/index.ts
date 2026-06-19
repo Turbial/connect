@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase.js";
-import type { Business, DataConfidence, ScoreDriver, ServiceSignal, VisibilityScore } from "../types.js";
+import type { Business, DataConfidence, ScoreDriver, ServiceSignal, Vertical, VisibilityScore } from "../types.js";
+import { industryInsightFor, weightedScore, weightTableFor } from "./weights.js";
 
 /**
  * Phase 3.2: aggregates the most recent signal from each of the 18 audit/
@@ -484,8 +485,8 @@ export async function computeVisibilityScore(businessId: string): Promise<Visibi
     if (result.recommendation) recommendations.push(result.recommendation);
   }
 
-  const scores = Object.values(categoryBreakdown);
-  const score = Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
+  const vertical: Vertical = business.vertical ?? "general";
+  const score = weightedScore(categoryBreakdown, weightTableFor(vertical));
 
   const { data: inserted, error } = await supabase
     .from("visibility_score")
@@ -513,6 +514,8 @@ export async function computeVisibilityScore(businessId: string): Promise<Visibi
     topDrivers: rankDrivers(categoryBreakdown),
     nextBestFix: pickNextBestFix(categories),
     dataConfidence: buildDataConfidence(categories),
+    vertical,
+    industryInsight: industryInsightFor(vertical),
   };
 }
 
@@ -537,6 +540,9 @@ export async function getLatestVisibilityScore(businessId: string): Promise<Visi
   const recommendations: string[] = latest.recommendations;
   const previousScore = prior?.score ?? null;
 
+  const { data: businessRow } = await supabase.from("business").select("vertical").eq("id", businessId).maybeSingle();
+  const vertical: Vertical = (businessRow as { vertical: Vertical | null } | null)?.vertical ?? "general";
+
   const dataConfidence: Record<string, DataConfidence> = {};
   for (const category of Object.keys(categoryBreakdown)) {
     dataConfidence[category] = "stale";
@@ -554,5 +560,7 @@ export async function getLatestVisibilityScore(businessId: string): Promise<Visi
     topDrivers: rankDrivers(categoryBreakdown),
     nextBestFix: recommendations[0] ?? null,
     dataConfidence,
+    vertical,
+    industryInsight: industryInsightFor(vertical),
   };
 }
