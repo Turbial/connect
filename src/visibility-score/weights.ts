@@ -37,11 +37,39 @@ const HOME_SERVICES_WEIGHTS: WeightTable = {
   "profile completeness": 1,
 };
 
-/** Phase 6.3: stubbed with the same shape as `general` — explicit per the
- * scope doc, tuning for these two verticals (§9.2/§9.3) is deferred to
- * Phase 7, not blocking 6.3's exit criteria of home services shipping. */
-const RESTAURANT_WEIGHTS: WeightTable = { ...EQUAL_WEIGHTS };
-const WELLNESS_WEIGHTS: WeightTable = { ...EQUAL_WEIGHTS };
+/** Restaurant per doc §4/§9.2: review sentiment and the named listing
+ * platforms (GBP/Yelp/OpenTable) are the highest-leverage levers, with
+ * Instagram/TikTok and food-photo freshness close behind — a visually-driven
+ * vertical, unlike home services. */
+const RESTAURANT_WEIGHTS: WeightTable = {
+  listings: 1.4,
+  reviews: 1.6,
+  "website health": 0.8,
+  "search presence": 1.3,
+  "social activity": 1.5,
+  "content freshness": 1.3,
+  "competitor strength": 1,
+  "ads readiness": 0.9,
+  "response rate": 1,
+  "profile completeness": 1.2,
+};
+
+/** Wellness (med spa/salon/clinic/gym) per doc §4/§9.3: Instagram/TikTok
+ * presence and trust signals (reviews, credentials, before/after content)
+ * are the highest-leverage levers — even more social-weighted than
+ * restaurants, since the doc calls Instagram/TikTok "very high" here. */
+const WELLNESS_WEIGHTS: WeightTable = {
+  listings: 1.2,
+  reviews: 1.4,
+  "website health": 0.9,
+  "search presence": 1.3,
+  "social activity": 1.6,
+  "content freshness": 1.4,
+  "competitor strength": 1,
+  "ads readiness": 0.9,
+  "response rate": 1.1,
+  "profile completeness": 1.1,
+};
 
 const WEIGHT_TABLES: Record<Vertical, WeightTable> = {
   home_services: HOME_SERVICES_WEIGHTS,
@@ -68,16 +96,17 @@ export function weightedScore(categoryBreakdown: Record<string, number>, weights
   return weightSum === 0 ? 0 : Math.round(weightedSum / weightSum);
 }
 
-/** Phase 6.3: vertical-specific framing for the audit report — content-angle
- * language from doc §9.1, generic copy for verticals not yet tuned (doc
- * §9.2/§9.3 follow-up) rather than inventing per-vertical claims this phase
- * doesn't actually back with tuned weights. */
+/** Vertical-specific framing for the audit report — content-angle language
+ * from doc §9.1/§9.2/§9.3. `general` stays null rather than inventing a
+ * per-vertical claim this phase doesn't back with tuned weights. */
 export function industryInsightFor(vertical: Vertical | null): string | null {
   switch (vertical ?? "general") {
     case "home_services":
       return "For home services, your local listing accuracy and review velocity matter most — Nextdoor, Angi, and Thumbtack visibility drive jobs more than social reach does.";
     case "restaurant":
+      return "For restaurants, review sentiment and your GBP/Yelp/OpenTable presence matter most — fresh food photos and Instagram/TikTok engagement drive foot traffic more than generic social reach does.";
     case "wellness":
+      return "For health, beauty, and wellness, Instagram/TikTok presence and trust signals matter most — reviews, before/after content, and booking conversion drive new clients more than generic social reach does.";
     case "general":
     default:
       return null;
