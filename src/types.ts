@@ -304,6 +304,12 @@ export interface Organization {
   posting_cadence: string | null;
   brand_voice_banned_words: string[] | null;
   content_paused: boolean;
+  /** Phase 8.7: per-org sender identity overrides so an agency's clients see
+   * the agency's own number/WhatsApp line, not MightyMax's default — null
+   * means "use the platform default," same as every other nullable org
+   * setting on this table. */
+  twilio_from_number: string | null;
+  whatsapp_phone_number_id: string | null;
   created_at: string;
 }
 

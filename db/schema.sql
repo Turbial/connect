@@ -722,3 +722,9 @@ alter table business add column if not exists manual_approval_threshold_cents in
 alter table business add column if not exists boost_allowed_platforms text[];
 alter table business add column if not exists boost_stop_loss_cents integer;
 alter table business add column if not exists boost_budget_reset_schedule text; -- daily | weekly
+
+-- 8.7: per-org sender-identity overrides for SMS/WhatsApp so an agency's
+-- clients see the agency's own number/WhatsApp line end-to-end, not just in
+-- the email subject line. Null means "use the platform default."
+alter table organization add column if not exists twilio_from_number text;
+alter table organization add column if not exists whatsapp_phone_number_id text;

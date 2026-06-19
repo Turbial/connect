@@ -110,9 +110,12 @@ export async function evaluateBoostTriggers(business: Business): Promise<void> {
         ].join(" ");
 
     if (business.owner_preferred_channel === "whatsapp" && (business.owner_mobile || business.owner_phone)) {
-      await sendApprovalWhatsapp(business.owner_mobile ?? business.owner_phone!, message, { buttons: boostButtons() });
+      await sendApprovalWhatsapp(business.owner_mobile ?? business.owner_phone!, message, {
+        buttons: boostButtons(),
+        phoneNumberIdOverride: organization?.whatsapp_phone_number_id ?? null,
+      });
     } else if (business.owner_phone) {
-      await sendApprovalSms(business.owner_phone, message);
+      await sendApprovalSms(business.owner_phone, message, organization?.twilio_from_number ?? null);
     } else if (business.owner_email) {
       await sendApprovalEmail(business.owner_email, `Boost this post? — ${orgDisplayName(organization)}`, message);
     }

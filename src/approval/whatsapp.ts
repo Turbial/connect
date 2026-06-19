@@ -33,12 +33,16 @@ export function boostButtons(): WhatsappButton[] {
 interface SendWhatsappOptions {
   mediaUrl?: string;
   buttons?: WhatsappButton[];
+  /** Phase 8.7: an org's own WhatsApp phone_number_id, standing in for the
+   * platform default so an agency's clients see the agency's own WhatsApp
+   * line — null/omitted falls back to WHATSAPP_PHONE_NUMBER_ID unchanged. */
+  phoneNumberIdOverride?: string | null;
 }
 
 /** Sends a WhatsApp message, optionally as an interactive message with a
  * media preview and up to 3 quick-reply buttons (WhatsApp's own limit). */
 export async function sendApprovalWhatsapp(to: string, body: string, options: SendWhatsappOptions = {}): Promise<void> {
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const phoneNumberId = options.phoneNumberIdOverride ?? process.env.WHATSAPP_PHONE_NUMBER_ID;
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
   if (!phoneNumberId || !accessToken) {
     throw new Error("WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN must be set");

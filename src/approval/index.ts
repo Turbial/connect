@@ -31,9 +31,9 @@ async function getChainSteps(organizationId: string): Promise<ApprovalChainStep[
  * the business owner (kept for traceability — the owner stays in the loop
  * even once brand/regional approval is required, rather than being dropped
  * from the conversation). */
-async function sendToStep(step: ApprovalChainStep, message: string): Promise<void> {
+async function sendToStep(step: ApprovalChainStep, message: string, organization: Organization | null): Promise<void> {
   if (step.phone) {
-    await sendApprovalSms(step.phone, message);
+    await sendApprovalSms(step.phone, message, organization?.twilio_from_number ?? null);
   } else if (step.email) {
     await sendApprovalEmail(step.email, "Approval needed", message);
   }
@@ -61,7 +61,7 @@ export async function requestApproval(business: Business, items: ContentItem[]):
 
   const chainSteps = organization ? await getChainSteps(organization.id) : [];
   const firstStep = chainSteps[0];
-  if (firstStep) await sendToStep(firstStep, message);
+  if (firstStep) await sendToStep(firstStep, message, organization);
 
   for (const item of items) {
     const { error } = await supabase.from("approval_request").insert({
@@ -124,7 +124,7 @@ async function advanceChain(
     (items ?? []).map((i) => ({ caption: i.caption }) as ContentItem),
     orgDisplayName(organization)
   );
-  await sendToStep(nextStep, message);
+  await sendToStep(nextStep, message, organization);
 
   for (const requestId of (pendingRequests ?? []).map((r) => r.id)) {
     await supabase.from("approval_request").update({ chain_step_index: nextIndex }).eq("id", requestId);

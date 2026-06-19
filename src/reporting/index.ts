@@ -188,10 +188,10 @@ export async function buildWeeklyReport(business: Business): Promise<string> {
 export async function sendWeeklyReport(business: Business): Promise<void> {
   const report = await buildWeeklyReport(business);
 
+  const organization = await getOrganizationForBusiness(business);
   if (business.owner_phone) {
-    await withRetry(() => sendApprovalSms(business.owner_phone!, report));
+    await withRetry(() => sendApprovalSms(business.owner_phone!, report, organization?.twilio_from_number ?? null));
   } else if (business.owner_email) {
-    const organization = await getOrganizationForBusiness(business);
     await withRetry(() => sendApprovalEmail(business.owner_email!, `Your ${orgDisplayName(organization)} Weekly Update`, report));
   }
 }
