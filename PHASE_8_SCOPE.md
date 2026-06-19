@@ -10,6 +10,24 @@ own Phase 3 goal.
 Connect proves not only that work was done, but that visibility improved
 and the right decisions were surfaced (doc §26 Phase 3 success metric).
 
+## Addendum: the agent-operable thesis (not a new phase)
+
+A second strategy review argued Connect's biggest standalone advantage may
+not be "AI-generated posts" but **agent-native infrastructure**: truthful
+state (`verified`/`sandbox`/`stub` tagging, real vs. synthetic metrics)
+that a Claude/OpenClaw-style operator agent can safely read and act on,
+with the owner staying in SMS/chat rather than a dashboard. This is not a
+separate phase — it is exactly what 8.9 (action queue) and 8.10 (tool
+router) already build toward, so their scope below is expanded to cover
+it directly rather than spawning new numbering. Two items absorb the bulk
+of the addendum: a read-only **operator snapshot** endpoint (folded into
+8.9) and an explicit **tool surface + dry-run/failure-diagnosis contract**
+(folded into 8.10). The "owner does not need a dashboard; the agent is the
+dashboard" framing is consistent with, not a departure from, the existing
+zero-dashboard constraint (doc §5/§24) — it explains *why* that constraint
+is strategically right, it doesn't ask for a dashboard to be built for a
+different audience.
+
 ---
 
 ## 8.1 A/B Creative Testing Before Boost
@@ -67,6 +85,11 @@ approval; `clampBudget` only enforces an upper bound on a requested amount.
 - The existing 5x hard safety cap (`clampBudget`) remains the absolute
   ceiling regardless of policy configuration — policy can be stricter than
   the hard cap, never looser.
+- Auto-boost and boost-eligibility threshold checks only consider a post on
+  a `verified`-tier platform (`src/lib/platformStatus.ts`) — a stub/sandbox
+  platform's synthetic metrics can never trigger or justify a boost, agent-
+  proposed or owner-approved alike, per the second strategy review's point
+  that boost logic must not act on metrics that aren't real.
 
 **Exit criteria:** a business with no policy configured behaves identically
 to today (always asks); a business with auto-boost configured gets
@@ -238,10 +261,26 @@ router can write to it.
   existing weekly-batch code path is not rewritten to depend on the queue
   yet, avoiding the doc's explicit warning ("the weekly cron loop is good,
   do not destroy it").
+- **Operator snapshot read endpoint** (`GET
+  /businesses/:id/operator-snapshot`), per the second strategy review's
+  point that an agent needs one call to understand a business's full
+  current state rather than stitching together five endpoints itself.
+  Assembled entirely from data this phase and Phase 6/7 already compute —
+  no new collection: `BusinessProfile` + vertical, the 6.1 score breakdown
+  (score, trend, drivers, nextBestFix, dataConfidence), connection health
+  (6.4's `getConnectionSummary`, including `missing_permissions`/
+  `failed_refresh`), pending approvals, recent `agent_action` rows,
+  boost candidates (8.1/8.2), and unresolved reviews. Each driver/action in
+  the response carries the doc's honesty tags (`risk`, `approval_required`,
+  `dataConfidence`) so an agent never treats a stub/sandbox platform's
+  numbers as real — the existing truth-tagging becomes the agent safety
+  layer, not a second one invented for agents specifically.
 
 **Exit criteria:** every action the existing system already takes is
 visible as a row in `agent_action` with full context, without changing how
-or when those actions actually execute.
+or when those actions actually execute; the operator snapshot endpoint
+gives a one-call summary of a business that an agent (or a human) could
+act on without querying the database directly.
 
 ---
 
@@ -269,6 +308,31 @@ migration.
   scope note.
 - Policy-check step reuses 8.2's boost policy engine as its first real
   policy gate, rather than inventing a separate policy model.
+- Per the second strategy review's tool taxonomy, the registered tools this
+  phase are read/planning tools layered on 8.9's snapshot
+  (`get_operator_snapshot`, `get_visibility_score`, `get_connection_health`,
+  `get_pending_approvals`) plus the handful of action tools that already
+  have a real, tested implementation to wrap (`queue_content`,
+  `propose_boost`, `run_visibility_audit`) — tools with no real backing
+  implementation yet (e.g. `create_crm_lead` beyond 8.8's webhook POST,
+  `create_pm_task`) are explicitly not registered this phase rather than
+  exposed as a tool that silently no-ops.
+- Every tool call writes its `agent_action` row (8.9) with a **dry-run
+  mode**: a tool can be invoked with `dryRun: true` to return what it would
+  do (target platform, cost, risk, approval requirement) without executing,
+  reusing the same input validation/policy-check path as a real call so the
+  preview can't drift from actual behavior.
+- Tool errors return the doc's structured-diagnosis shape (failed step,
+  underlying reason, required owner action) instead of a bare exception
+  string — wrapping existing error paths (e.g. a Meta token error already
+  carries a reason in `DistributionFailure`/`recordFailure`'s classification
+  from 6.4) rather than inventing new diagnostic text per tool.
+
+**Exit criteria for the addendum:** an agent (or a test harness standing in
+for one) can call `get_operator_snapshot`, dry-run a `propose_boost` call,
+and see the resulting risk/approval/cost preview match what a real
+`propose_boost` call would have done — without that agent ever needing
+direct database access.
 
 **Exit criteria:** at least one real owner-facing flow is dispatched
 through the router/tool-registry/action-queue path instead of a direct
