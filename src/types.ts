@@ -252,7 +252,14 @@ export interface Business {
   owner_verified_at: string | null;
   owner_verification_code: string | null;
   owner_verification_code_expires_at: string | null;
+  package_tier: PackageTier | null;
 }
+
+/** Phase 6.7: the entitlement tier a business/org is on. Starter and
+ * local_operator are the two tiers whose features are fully covered by
+ * Phase 6 + existing Phases 1-5; the rest are named placeholders whose
+ * features ship in Phase 7/8 — see PACKAGE_FEATURES in lib/packages.ts. */
+export type PackageTier = "starter_audit" | "local_operator" | "growth_operator" | "vertical_pro" | "agency" | "franchise";
 
 /** Phase 6.2: the channel the owner has said they want to be reached on for
  * approvals/digests — sms is the only one with a working transport today

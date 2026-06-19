@@ -5,6 +5,7 @@ import { requestApproval, applyTimeouts, getEditQueue, draftEditRewrite, propose
 import { postApprovedContent } from "../distribution/index.js";
 import { sendWeeklyReport } from "../reporting/index.js";
 import { isOwnerVerified } from "../lib/ownerVerification.js";
+import { hasFeature } from "../lib/packages.js";
 import type { Business, ContentItem } from "../types.js";
 
 const TIMEOUT_HOURS = Number(process.env.APPROVAL_TIMEOUT_HOURS ?? 48);
@@ -12,6 +13,11 @@ const TIMEOUT_HOURS = Number(process.env.APPROVAL_TIMEOUT_HOURS ?? 48);
 async function runForBusiness(business: Business): Promise<void> {
   if (!isOwnerVerified(business)) {
     console.log(`Skipping business ${business.id}: owner phone not yet verified.`);
+    return;
+  }
+
+  if (!hasFeature(business, "content_generation")) {
+    console.log(`Skipping business ${business.id}: package tier does not include content generation.`);
     return;
   }
 
@@ -40,7 +46,9 @@ async function main(): Promise<void> {
 
   for (const business of (businesses ?? []) as Business[]) {
     if (!isOwnerVerified(business)) continue;
-    await postApprovedContent(business);
+    if (hasFeature(business, "auto_posting")) {
+      await postApprovedContent(business);
+    }
     await sendWeeklyReport(business);
   }
 

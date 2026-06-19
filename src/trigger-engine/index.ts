@@ -2,6 +2,7 @@ import { supabase } from "../lib/supabase.js";
 import { sendApprovalSms } from "../approval/sms.js";
 import { sendApprovalEmail } from "../approval/email.js";
 import { getOrganizationForBusiness, orgDisplayName, resolveBusinessSetting } from "../lib/orgSettings.js";
+import { hasFeature } from "../lib/packages.js";
 import type { AdPlatform, Business, Organization, Post } from "../types.js";
 
 /** A post earns a boost prompt once it clears either threshold and has no existing boost_trigger. */
@@ -23,6 +24,8 @@ function meetsThreshold(business: Business, organization: Organization | null, p
 /** Scans a business's posted content for organic performance that clears the boost threshold,
  * and prompts the owner to approve turning it into a paid ad. */
 export async function evaluateBoostTriggers(business: Business): Promise<void> {
+  if (!hasFeature(business, "boost_proposals")) return;
+
   const adPlatform = pickAdPlatform(business);
   if (!adPlatform) return;
 
