@@ -3,6 +3,45 @@ import { recordNextBestFixSuggestions } from "../lib/nextBestFix.js";
 import type { Business, DataConfidence, ScoreDriver, ServiceSignal, Vertical, VisibilityScore } from "../types.js";
 import { industryInsightFor, weightedScore, weightTableFor } from "./weights.js";
 
+export interface OrgLocationScore {
+  businessId: string;
+  businessName: string;
+  score: number | null;
+}
+
+export interface OrgVisibilityRollup {
+  locations: OrgLocationScore[];
+  averageScore: number | null;
+}
+
+/** Phase 8.6: read-only org-level rollup of each location's (business's)
+ * latest visibility score plus an org-wide average. A location with no score
+ * yet contributes `null` and is excluded from the average rather than
+ * pulling it toward 0 — a business that hasn't been scored isn't "failing,"
+ * it's just unscored. An org of one location behaves identically to viewing
+ * that business's own score, by construction. */
+export function buildOrgVisibilityRollup(locations: { businessId: string; businessName: string; score: number | null }[]): OrgVisibilityRollup {
+  const scored = locations.filter((l) => l.score !== null) as { score: number }[];
+  const averageScore = scored.length === 0 ? null : Math.round(scored.reduce((sum, l) => sum + l.score, 0) / scored.length);
+  return { locations, averageScore };
+}
+
+/** Fetches every business under an organization, plus each one's latest
+ * visibility score, and rolls them up into a per-location list + average. */
+export async function getOrgVisibilityRollup(organizationId: string): Promise<OrgVisibilityRollup> {
+  const { data: businesses, error } = await supabase.from("business").select("id, name").eq("organization_id", organizationId);
+  if (error) throw error;
+
+  const locations = await Promise.all(
+    ((businesses ?? []) as { id: string; name: string }[]).map(async (b) => {
+      const latest = await getLatestVisibilityScore(b.id);
+      return { businessId: b.id, businessName: b.name, score: latest?.score ?? null };
+    })
+  );
+
+  return buildOrgVisibilityRollup(locations);
+}
+
 /**
  * Phase 3.2: aggregates the most recent signal from each of the 18 audit/
  * service-module rows into one 0-100 score with a category breakdown.
