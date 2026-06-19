@@ -8,6 +8,7 @@ import { getConnectionSummary } from "./lib/platformConnection.js";
 import { getLatestVisibilityScore } from "./visibility-score/index.js";
 import { buildOrgWeeklyReport } from "./reporting/index.js";
 import { statusOfPartnerAccess, PARTNER_ACCESS_RISK } from "./lib/partnerAccessRisk.js";
+import { platformStatusReport } from "./lib/platformStatus.js";
 import { handleMissedCall } from "./lib/missedCallTextback.js";
 import { recordCustomerMessage, getLatestInboundChannel } from "./lib/customerMessaging.js";
 import { sendApprovalSms } from "./approval/sms.js";
@@ -175,6 +176,13 @@ async function handlePartnerAccessRiskRoute(req: http.IncomingMessage, res: http
   res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(register));
 }
 
+/** Phase 6.6: truth-labeled platform status view — the single source any
+ * platform-count claim should be generated from, instead of authored
+ * separately and risking drift from the real adapter/status tagging. */
+async function handlePlatformStatusRoute(req: http.IncomingMessage, res: http.ServerResponse) {
+  res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(platformStatusReport()));
+}
+
 /** Phase 5.3: Twilio call-status webhook for missed-call text-back. Resolves
  * the business by the number the customer called — business.phone is reused
  * as "the number customers call," matching its existing meaning elsewhere in
@@ -260,6 +268,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "GET" && req.url === "/platforms/partner-access-risk") {
     await handlePartnerAccessRiskRoute(req, res);
+    return;
+  }
+  if (req.method === "GET" && req.url === "/platforms/status") {
+    await handlePlatformStatusRoute(req, res);
     return;
   }
   const connectionsMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/connections$/);

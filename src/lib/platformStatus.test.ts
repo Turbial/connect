@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLivePlatform, statusOf } from "./platformStatus.js";
+import { isLivePlatform, platformStatusReport, statusOf } from "./platformStatus.js";
 
 describe("statusOf", () => {
   it("returns the explicitly tagged status for a Tier-1 platform", () => {
@@ -23,5 +23,26 @@ describe("isLivePlatform", () => {
 
   it("treats stub platforms as not live", () => {
     expect(isLivePlatform("amazon")).toBe(false);
+  });
+});
+
+describe("platformStatusReport", () => {
+  it("counts verified and organic-only platforms from real tagging only", () => {
+    const report = platformStatusReport();
+    expect(report.verifiedCount).toBeGreaterThan(0);
+    expect(report.organicOnlyCount).toBeGreaterThan(0);
+    expect(report.totalAdaptersBuilt).toBe(report.verifiedCount + report.organicOnlyCount);
+  });
+
+  it("never includes stub platforms in gatedPlatforms", () => {
+    const report = platformStatusReport();
+    expect(report.gatedPlatforms.some((g) => g.platform === "amazon")).toBe(false);
+  });
+
+  it("gives every gated platform a non-empty reason", () => {
+    const report = platformStatusReport();
+    for (const entry of report.gatedPlatforms) {
+      expect(entry.reason.length).toBeGreaterThan(0);
+    }
   });
 });

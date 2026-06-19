@@ -1,4 +1,5 @@
 import type { Platform } from "../types.js";
+import { statusOfPartnerAccess } from "./partnerAccessRisk.js";
 
 /**
  * Per the development program (Phase 1.1): every platform's real integration
@@ -65,6 +66,62 @@ const platformStatus: Record<Platform, PlatformStatus> = new Proxy(
 
 export function statusOf(platform: Platform): PlatformStatus {
   return platformStatus[platform];
+}
+
+/** Every platform with a real adapter behind it (verified, sandbox, or
+ * partner_gated) — i.e. the platforms TIER1_STATUS actually tags, as opposed
+ * to the much larger Platform union most of which default to "stub" with no
+ * adapter at all. */
+function platformsWithRealAdapter(): Platform[] {
+  return Object.keys(TIER1_STATUS) as Platform[];
+}
+
+export interface GatedPlatformEntry {
+  platform: Platform;
+  status: PlatformStatus;
+  reason: string;
+}
+
+export interface PlatformStatusReport {
+  verifiedCount: number;
+  organicOnlyCount: number;
+  totalAdaptersBuilt: number;
+  gatedPlatforms: GatedPlatformEntry[];
+}
+
+function gatingReason(platform: Platform, status: PlatformStatus): string {
+  const risk = statusOfPartnerAccess(platform);
+  if (status === "sandbox") {
+    return "Real adapter built against the documented API, but not yet run against a live production account.";
+  }
+  if (risk.partnerApprovalRequired === "required") {
+    return "Partner-program approval is required and has not been confirmed yet.";
+  }
+  if (risk.partnerApprovalRequired === "likely") {
+    return "Partner-program approval is likely required and has not been confirmed yet.";
+  }
+  return "Posting access is not yet confirmed for this platform.";
+}
+
+/** Per Phase 6.6: a single source of truth for any platform-count claim the
+ * product makes (audit report, email digest, marketing copy) — generated
+ * directly from the existing platformStatus/partnerAccessRisk tagging so the
+ * claim can never drift from reality. Deliberately does not enumerate the
+ * full Platform union's "stub" platforms (most have no real adapter at all)
+ * to avoid implying a padded platform count. */
+export function platformStatusReport(): PlatformStatusReport {
+  const adapters = platformsWithRealAdapter();
+  const verifiedCount = adapters.filter((p) => statusOf(p) === "verified").length;
+  const gated = adapters
+    .filter((p) => statusOf(p) === "sandbox" || statusOf(p) === "partner_gated")
+    .map((p) => ({ platform: p, status: statusOf(p), reason: gatingReason(p, statusOf(p)) }));
+
+  return {
+    verifiedCount,
+    organicOnlyCount: gated.length,
+    totalAdaptersBuilt: adapters.length,
+    gatedPlatforms: gated,
+  };
 }
 
 /** Only these statuses represent a platform that actually publishes a real,
