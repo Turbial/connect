@@ -161,3 +161,10 @@ alter table business add column if not exists tumblr_blog_name text;
 alter table business add column if not exists tumblr_access_token text;
 alter table business add column if not exists wechat_official_account_id text;
 alter table business add column if not exists wechat_access_token text;
+
+-- ── Phase 9: AI feature expansion (hashtag/SEO, translation, sentiment tone) ─
+-- Triples the Content Engine's AI capabilities beyond plain copy+image+video
+-- generation: SEO-optimized hashtag generation, multi-language translation,
+-- and sentiment-aware tone adjustment for review-triggered content.
+
+alter table business add column if not exists preferred_language text;

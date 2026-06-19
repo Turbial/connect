@@ -12,7 +12,7 @@ clear module boundaries below.
 
 | Module | Responsibility |
 |---|---|
-| `src/content-engine` | Generates platform-tailored post copy + images/videos (DeepSeek + fal.ai). `connectedPlatforms()` determines which platforms a business posts to; `queueWeeklyContent` and `queueReviewTriggeredContent` (Phase 4) both fan out per-platform. TikTok/YouTube route through `generateVideo()` (fal.ai kling-video text-to-video) instead of the static-image path. |
+| `src/content-engine` | Generates platform-tailored post copy + images/videos (DeepSeek + fal.ai). `connectedPlatforms()` determines which platforms a business posts to; `queueWeeklyContent` and `queueReviewTriggeredContent` (Phase 4) both fan out per-platform. TikTok/YouTube route through `generateVideo()` (fal.ai kling-video text-to-video) instead of the static-image path. Phase 9 adds SEO-optimized hashtag generation (`generateHashtags`, for platforms whose brief calls for hashtags), multi-language translation (`translateCaption`, driven by `business.preferred_language`), and sentiment-aware tone adjustment for review-triggered copy (`sentimentTone`, driven by the triggering review's star rating). |
 | `src/approval` | Sends SMS (Twilio) or email and parses content YES/NO/EDIT replies (`index.ts`/`sms.ts`/`email.ts`) and boost BOOST YES/NO replies (`boost.ts`). |
 | `src/distribution` | Posts approved content across all 18 connected platforms. Each platform's API calls are isolated behind its own adapter (`gbp.ts`, `meta.ts`, `pinterest.ts`, `twitter.ts`, `linkedin.ts`, `threads.ts`, `yelp.ts`, `nextdoor.ts`, `snapchat.ts`, `tiktok.ts`, `youtube.ts`, `whatsapp.ts`, `reddit.ts`, `bluesky.ts`, `mastodon.ts`, `tumblr.ts`, `wechat.ts`); `index.ts` dispatches per item per platform. |
 | `src/performance` | Polls each connected platform's insights/analytics API for posted items. |
@@ -35,6 +35,15 @@ clear module boundaries below.
 6. `npm run dev` to start the webhook server.
 
 ## Known gaps to resolve before production
+- Hashtag generation (`generateHashtags`) and translation (`translateCaption`) are each
+  a separate DeepSeek call per content item, on top of the base caption call — this
+  roughly triples DeepSeek usage for businesses with `preferred_language` set and
+  platforms in `HASHTAG_PLATFORMS`. Worth batching into a single structured-output
+  call if DeepSeek cost/latency becomes a concern at scale.
+- Sentiment-aware tone (`sentimentTone`) only has signal for ratings >= `MIN_RATING_FOR_CONTENT`
+  (4) today, since `reach-integration/index.ts` only queues content for positive reviews —
+  the "matter-of-fact" branch for lower ratings is unreachable in practice but kept as a
+  safe default in case that filter changes.
 - `src/distribution/gbp.ts` targets the legacy Local Posts endpoint as a placeholder.
   Confirm the current Business Profile API surface once GBP API access is granted
   (this has external approval lead time, same as Google Ads developer token approval).

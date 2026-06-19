@@ -50,12 +50,18 @@ export async function queueWeeklyContent(business: Business, count = 3): Promise
   }
 }
 
-/** Phase 4: generates a single draft from a review and queues it across connected platforms. */
-export async function queueReviewTriggeredContent(business: Business, reviewId: string, brief: string): Promise<void> {
+/** Phase 4: generates a single draft from a review and queues it across connected platforms.
+ * reviewRating drives sentiment-aware tone adjustment in the Content Engine (Phase 9). */
+export async function queueReviewTriggeredContent(
+  business: Business,
+  reviewId: string,
+  brief: string,
+  reviewRating?: number | null
+): Promise<void> {
   const platforms = connectedPlatforms(business);
 
   for (const platform of platforms) {
-    const { caption, mediaUrl, mediaType } = await generatePost(business, platform, brief);
+    const { caption, mediaUrl, mediaType } = await generatePost(business, platform, brief, reviewRating);
 
     const { error } = await supabase.from("content_item").insert({
       business_id: business.id,

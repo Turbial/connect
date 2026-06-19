@@ -49,6 +49,7 @@ export interface Business {
   tumblr_access_token: string | null;
   wechat_official_account_id: string | null;
   wechat_access_token: string | null;
+  preferred_language: string | null;
 }
 
 export type ContentStatus = "queued" | "approved" | "posted" | "rejected" | "edited";

@@ -43,5 +43,5 @@ export async function handleReachReview(payload: ReachReviewPayload): Promise<vo
     .single();
   if (businessError) throw businessError;
 
-  await queueReviewTriggeredContent(business as Business, review.id, buildBrief(payload));
+  await queueReviewTriggeredContent(business as Business, review.id, buildBrief(payload), payload.rating);
 }

@@ -28,13 +28,22 @@ const PLATFORM_BRIEF: Record<Platform, string> = {
 /** Platforms that require a video asset rather than a static image. */
 const VIDEO_PLATFORMS = new Set<Platform>(["tiktok", "youtube"]);
 
-async function generateCaption(business: Business, platform: Platform, context?: string): Promise<string> {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey) {
-    return `Check out what's new at ${business.name} this week!`;
-  }
+/** Platforms whose brief calls for hashtags, where SEO-optimized hashtag generation adds value. */
+const HASHTAG_PLATFORMS = new Set<Platform>(["instagram", "pinterest", "twitter", "tiktok", "mastodon", "tumblr"]);
 
-  const contextLine = context ? ` Base it on this: ${context}.` : "";
+/** Maps a review's star rating to a tone descriptor for sentiment-aware review-triggered
+ * copy. Reviews below MIN_RATING_FOR_CONTENT (4) never reach here in practice, but this
+ * stays conservative for any rating outside the expected positive range. */
+function sentimentTone(reviewRating?: number | null): string | null {
+  if (reviewRating == null) return null;
+  if (reviewRating >= 5) return "warm, genuinely thrilled, and grateful";
+  if (reviewRating >= 4) return "appreciative and upbeat";
+  return "matter-of-fact and measured";
+}
+
+async function callDeepSeek(prompt: string): Promise<string | null> {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) return null;
 
   const res = await fetch(DEEPSEEK_URL, {
     method: "POST",
@@ -44,12 +53,7 @@ async function generateCaption(business: Business, platform: Platform, context?:
     },
     body: JSON.stringify({
       model: "deepseek-chat",
-      messages: [
-        {
-          role: "user",
-          content: `Write ${PLATFORM_BRIEF[platform]} for ${business.name}, located in ${business.location ?? "the local area"}.${contextLine} Keep it specific and concrete, not generic marketing copy.`,
-        },
-      ],
+      messages: [{ role: "user", content: prompt }],
     }),
   });
 
@@ -59,6 +63,43 @@ async function generateCaption(business: Business, platform: Platform, context?:
 
   const data = (await res.json()) as { choices: { message: { content: string } }[] };
   return data.choices[0].message.content.trim();
+}
+
+async function generateCaption(
+  business: Business,
+  platform: Platform,
+  context?: string,
+  reviewRating?: number | null
+): Promise<string> {
+  const contextLine = context ? ` Base it on this: ${context}.` : "";
+  const tone = sentimentTone(reviewRating);
+  const toneLine = tone ? ` Write in a tone that's ${tone}, reflecting the sentiment of the feedback it's based on.` : "";
+
+  const result = await callDeepSeek(
+    `Write ${PLATFORM_BRIEF[platform]} for ${business.name}, located in ${business.location ?? "the local area"}.${contextLine}${toneLine} Keep it specific and concrete, not generic marketing copy.`
+  );
+  return result ?? `Check out what's new at ${business.name} this week!`;
+}
+
+/** Generates SEO-optimized, platform-appropriate hashtags for platforms whose
+ * brief calls for them, as a separate pass from caption generation so hashtag
+ * quality doesn't depend on the main copy prompt staying within length limits. */
+async function generateHashtags(business: Business, caption: string, platform: Platform): Promise<string[]> {
+  const result = await callDeepSeek(
+    `Generate 3-5 SEO-optimized, ${platform}-appropriate hashtags for this post from ${business.name} in ${business.location ?? "the local area"}: "${caption}". Respond with only the hashtags, each starting with #, separated by spaces. No explanation.`
+  );
+  if (!result) return [];
+  return result.split(/\s+/).filter((token) => token.startsWith("#"));
+}
+
+/** Translates a generated caption into the business's preferred language, preserving
+ * tone and any existing hashtags. Used when business.preferred_language is set to
+ * something other than English. */
+async function translateCaption(caption: string, language: string): Promise<string> {
+  const result = await callDeepSeek(
+    `Translate the following social media post into ${language}, preserving its tone and keeping any hashtags as-is: "${caption}"`
+  );
+  return result ?? caption;
 }
 
 async function generateImage(business: Business, caption: string): Promise<string | null> {
@@ -116,8 +157,23 @@ async function generateVideo(business: Business, caption: string): Promise<strin
   return data.video?.url ?? null;
 }
 
-export async function generatePost(business: Business, platform: Platform = "gbp", context?: string): Promise<GeneratedPost> {
-  const caption = await generateCaption(business, platform, context);
+export async function generatePost(
+  business: Business,
+  platform: Platform = "gbp",
+  context?: string,
+  reviewRating?: number | null
+): Promise<GeneratedPost> {
+  let caption = await generateCaption(business, platform, context, reviewRating);
+
+  if (business.preferred_language && business.preferred_language.toLowerCase() !== "en") {
+    caption = await translateCaption(caption, business.preferred_language);
+  }
+
+  if (HASHTAG_PLATFORMS.has(platform)) {
+    const hashtags = await generateHashtags(business, caption, platform);
+    if (hashtags.length > 0) caption = `${caption}\n\n${hashtags.join(" ")}`;
+  }
+
   const mediaType: MediaType = VIDEO_PLATFORMS.has(platform) ? "video" : "image";
   const mediaUrl = mediaType === "video" ? await generateVideo(business, caption) : await generateImage(business, caption);
   return { caption, mediaUrl, mediaType };
