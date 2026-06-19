@@ -11,7 +11,9 @@ export type ConnectionStatus =
   | "unsupported"
   | "expiring"
   | "expired"
-  | "failed";
+  | "failed"
+  | "missing_permissions"
+  | "failed_refresh";
 
 export async function getConnection(businessId: string, platform: Platform): Promise<PlatformConnection | null> {
   const { data, error } = await supabase
@@ -92,9 +94,19 @@ export async function markMetricsSynced(businessId: string, platform: Platform):
  * 'failed' (actionable, surfaced in connection summary) rather than silently
  * staying 'verified', but we don't invent a status for connections that were
  * never confirmed in the first place beyond their current state. */
+/** Classifies a raw dispatch/refresh error string into the most specific
+ * connection state it actually matches — falls back to the generic "failed"
+ * rather than guessing a more specific state the error text doesn't support. */
+export function classifyFailure(reason: string): ConnectionStatus {
+  const normalized = reason.toLowerCase();
+  if (normalized.includes("permission") || normalized.includes("scope")) return "missing_permissions";
+  if (normalized.includes("refresh")) return "failed_refresh";
+  return "failed";
+}
+
 export async function recordFailure(businessId: string, platform: Platform, reason: string): Promise<void> {
   const existing = await getConnection(businessId, platform);
-  const nextStatus: ConnectionStatus = existing?.status === "expired" ? "expired" : "failed";
+  const nextStatus: ConnectionStatus = existing?.status === "expired" ? "expired" : classifyFailure(reason);
 
   const { error } = await supabase.from("platform_connection").upsert(
     {
@@ -126,6 +138,11 @@ export async function getConnectionSummary(businessId: string): Promise<Connecti
     lastPostedAt: c.last_posted_at,
     lastMetricsSyncAt: c.last_metrics_sync_at,
     failureReason: c.failure_reason,
-    actionRequired: c.status === "expiring" || c.status === "expired" || c.status === "failed",
+    actionRequired:
+      c.status === "expiring" ||
+      c.status === "expired" ||
+      c.status === "failed" ||
+      c.status === "missing_permissions" ||
+      c.status === "failed_refresh",
   }));
 }

@@ -11,6 +11,7 @@ import { statusOfPartnerAccess, PARTNER_ACCESS_RISK } from "./lib/partnerAccessR
 import { handleMissedCall } from "./lib/missedCallTextback.js";
 import { recordCustomerMessage, getLatestInboundChannel } from "./lib/customerMessaging.js";
 import { sendApprovalSms } from "./approval/sms.js";
+import { sendOwnerVerificationCode, confirmOwnerVerification } from "./lib/ownerVerification.js";
 import type { Business, Platform } from "./types.js";
 
 async function handleSmsWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -115,6 +116,39 @@ async function handleReachWebhook(req: http.IncomingMessage, res: http.ServerRes
 async function handleConnectionsRoute(req: http.IncomingMessage, res: http.ServerResponse, businessId: string) {
   const summary = await getConnectionSummary(businessId);
   res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(summary));
+}
+
+/** Phase 6.4: kicks off owner phone verification — the weekly loop is gated
+ * on owner_verified_at being set (see jobs/weeklyBatch.ts), and this is the
+ * only way to start that gate from outside a developer seeding rows. */
+async function handleSendOwnerVerificationRoute(req: http.IncomingMessage, res: http.ServerResponse, businessId: string) {
+  const { data: businessRow, error } = await supabase.from("business").select("*").eq("id", businessId).maybeSingle();
+  if (error) throw error;
+  if (!businessRow) {
+    res.writeHead(404).end();
+    return;
+  }
+  await sendOwnerVerificationCode(businessRow as Business);
+  res.writeHead(200).end();
+}
+
+async function handleConfirmOwnerVerificationRoute(req: http.IncomingMessage, res: http.ServerResponse, businessId: string) {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+  let payload: { code?: string };
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    res.writeHead(400).end();
+    return;
+  }
+  if (!payload.code) {
+    res.writeHead(400).end();
+    return;
+  }
+
+  const verified = await confirmOwnerVerification(businessId, payload.code);
+  res.writeHead(verified ? 200 : 400, { "Content-Type": "application/json" }).end(JSON.stringify({ verified }));
 }
 
 async function handleVisibilityScoreRoute(req: http.IncomingMessage, res: http.ServerResponse, businessId: string) {
@@ -231,6 +265,16 @@ const server = http.createServer(async (req, res) => {
   const connectionsMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/connections$/);
   if (connectionsMatch) {
     await handleConnectionsRoute(req, res, connectionsMatch[1]);
+    return;
+  }
+  const sendVerificationMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/owner-verification\/send$/);
+  if (sendVerificationMatch) {
+    await handleSendOwnerVerificationRoute(req, res, sendVerificationMatch[1]);
+    return;
+  }
+  const confirmVerificationMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/owner-verification\/confirm$/);
+  if (confirmVerificationMatch) {
+    await handleConfirmOwnerVerificationRoute(req, res, confirmVerificationMatch[1]);
     return;
   }
   const visibilityScoreMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/visibility-score$/);

@@ -249,6 +249,9 @@ export interface Business {
   target_locations: string[] | null;
   compliance_restrictions: string[] | null;
   vertical: Vertical | null;
+  owner_verified_at: string | null;
+  owner_verification_code: string | null;
+  owner_verification_code_expires_at: string | null;
 }
 
 /** Phase 6.2: the channel the owner has said they want to be reached on for
