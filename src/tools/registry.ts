@@ -120,6 +120,17 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
  * real one. */
 export async function callTool(toolName: ToolName, businessId: string, options: ToolCallOptions): Promise<ToolCallResult> {
   const definition = TOOLS[toolName];
+  if (!definition) {
+    return {
+      status: "failed",
+      diagnosis: {
+        failedStep: "resolve_tool",
+        reason: `Unknown tool "${toolName}".`,
+        ownerAction: "Confirm the tool name matches one of the registered tools.",
+      },
+    };
+  }
+
   const business = await fetchBusiness(businessId);
   if (!business) {
     return {
