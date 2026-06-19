@@ -18,13 +18,20 @@ export async function postToFacebookPage(business: Business, item: ContentItem):
     throw new Error(`Business ${business.id} is not connected to a Facebook Page`);
   }
 
-  const endpoint = item.media_url
-    ? `${GRAPH_BASE}/${business.fb_page_id}/photos`
-    : `${GRAPH_BASE}/${business.fb_page_id}/feed`;
+  const isVideo = item.media_type === "video" && item.media_url;
+  const endpoint = isVideo
+    ? `${GRAPH_BASE}/${business.fb_page_id}/videos`
+    : item.media_url
+      ? `${GRAPH_BASE}/${business.fb_page_id}/photos`
+      : `${GRAPH_BASE}/${business.fb_page_id}/feed`;
 
   const params = new URLSearchParams({
     access_token: business.fb_page_access_token,
-    ...(item.media_url ? { url: item.media_url, caption: item.caption } : { message: item.caption }),
+    ...(isVideo
+      ? { file_url: item.media_url!, description: item.caption }
+      : item.media_url
+        ? { url: item.media_url, caption: item.caption }
+        : { message: item.caption }),
   });
 
   const res = await fetch(endpoint, { method: "POST", body: params });
