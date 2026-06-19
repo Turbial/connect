@@ -4,7 +4,9 @@ import { sendApprovalSms } from "../approval/sms.js";
 import { sendApprovalEmail } from "../approval/email.js";
 import { getOrganizationForBusiness, orgDisplayName, resolveBusinessSetting } from "../lib/orgSettings.js";
 import { hasFeature } from "../lib/packages.js";
-import type { AdPlatform, Business, Organization, Post } from "../types.js";
+import { tryAutoBoost } from "../approval/boost.js";
+import { statusOf } from "../lib/platformStatus.js";
+import type { AdPlatform, Business, BoostTrigger, Organization, Post } from "../types.js";
 
 /** A post earns a boost prompt once it clears either threshold and has no existing boost_trigger. */
 const VIEWS_THRESHOLD = 500;
@@ -73,8 +75,9 @@ export async function evaluateBoostTriggers(business: Business): Promise<void> {
 
   // Only "a" variants are scanned for trigger eligibility — a "b" variant
   // (Phase 8.1) is a comparison data point for its sibling "a" post, not an
-  // independent boost candidate of its own.
-  for (const post of allPosts.filter((p) => p.variant === "a")) {
+  // independent boost candidate of its own. Phase 8.2: a stub/sandbox
+  // platform's synthetic metrics can never trigger or justify a boost.
+  for (const post of allPosts.filter((p) => p.variant === "a" && statusOf(p.platform) === "verified")) {
     if (triggeredPostIds.has(post.id) || !meetsThreshold(business, organization, post)) continue;
 
     // Phase 8.1: where a sibling "b" post exists and has been measured (its
@@ -85,10 +88,18 @@ export async function evaluateBoostTriggers(business: Business): Promise<void> {
     );
 
     const winner = variantB && variantB.engagement > post.engagement ? variantB : post;
-    const { error: insertError } = await supabase
+    const { data: insertedTrigger, error: insertError } = await supabase
       .from("boost_trigger")
-      .insert({ post_id: winner.id, ad_platform: adPlatform });
+      .insert({ post_id: winner.id, ad_platform: adPlatform })
+      .select()
+      .single();
     if (insertError) throw insertError;
+
+    // Phase 8.2: a configured policy can launch the boost immediately,
+    // without an owner approval round-trip — skip sending the proposal
+    // message entirely in that case. A business with no policy configured
+    // always falls through to the message below, exactly as today.
+    if (await tryAutoBoost(business, insertedTrigger as BoostTrigger, winner)) continue;
 
     const caption = captionByItemId.get(post.content_item_id) ?? "your recent post";
     const message = variantB

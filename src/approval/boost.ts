@@ -3,6 +3,7 @@ import { generateAdCreative } from "../ads/creative.js";
 import { launchMetaCampaign } from "../ads/metaAds.js";
 import { launchGoogleCampaign } from "../ads/googleAds.js";
 import { getOrganizationForBusiness, resolveBusinessSetting } from "../lib/orgSettings.js";
+import { canAutoBoost } from "../lib/boostPolicy.js";
 import type { Business, BoostTrigger, Post } from "../types.js";
 
 /** Default boost spend until businesses can configure their own budget. */
@@ -63,20 +64,82 @@ export function clampBudget(requestedCents: number, ceilingBaseCents: number): n
   return Math.min(requestedCents, maxCents);
 }
 
+type PostWithContentItem = Post & { content_item: { business_id: string; caption: string; caption_variant_b: string | null } | null };
+
+async function fetchBusinessPosts(businessId: string): Promise<PostWithContentItem[]> {
+  const { data: posts, error } = await supabase
+    .from("post")
+    .select("*, content_item:content_item_id(business_id, caption, caption_variant_b)")
+    .returns<PostWithContentItem[]>();
+  if (error) throw error;
+  return (posts ?? []).filter((p) => p.content_item?.business_id === businessId);
+}
+
+/** Phase 8.1: the boost_trigger may point at the winning "b" post when a
+ * staggered A/B test ran — boost the caption that actually won, not
+ * always the "a" variant's text. */
+function captionFor(post: PostWithContentItem | undefined): string {
+  return (post?.variant === "b" ? post?.content_item?.caption_variant_b : post?.content_item?.caption) ?? "";
+}
+
+/** Resolves the default per-boost budget (business/org setting, or the
+ * hardcoded fallback) and clamps an owner-specified override against it. */
+export async function resolveBudgetCents(business: Business, requestedBudgetCents: number | null): Promise<number> {
+  const organization = await getOrganizationForBusiness(business);
+  const defaultBudgetCents = resolveBusinessSetting(business, organization, "boost_budget_cents", DEFAULT_BUDGET_CENTS);
+  return requestedBudgetCents ? clampBudget(requestedBudgetCents, defaultBudgetCents) : defaultBudgetCents;
+}
+
+/** Generates ad creative from `caption` and launches it on `trigger`'s ad
+ * platform, then records the result on the boost_trigger row. Shared by
+ * the owner-approved path (handleBoostReply) and the Phase 8.2 auto-boost
+ * path (trigger-engine), so both record the launch identically. */
+export async function launchBoost(business: Business, trigger: BoostTrigger, caption: string, budgetCents: number): Promise<void> {
+  const creative = await generateAdCreative(business, caption);
+  const result =
+    trigger.ad_platform === "google"
+      ? await launchGoogleCampaign(business, creative, budgetCents)
+      : await launchMetaCampaign(business, creative, budgetCents);
+
+  await supabase
+    .from("boost_trigger")
+    .update({ ad_campaign_id: result.campaignId, budget_cents: budgetCents })
+    .eq("id", trigger.id);
+}
+
+/** Phase 8.2: attempts to launch a boost immediately, without an owner
+ * approval round-trip, when the business's configured policy allows it.
+ * Returns true if it launched; false (the common case — no policy
+ * configured) means the caller should fall back to asking the owner. */
+export async function tryAutoBoost(business: Business, trigger: BoostTrigger, post: Post): Promise<boolean> {
+  if (!trigger.ad_platform) return false;
+
+  const budgetCents = await resolveBudgetCents(business, null);
+  const decision = await canAutoBoost(business, post, budgetCents);
+  if (!decision.allowed) return false;
+
+  const posts = await fetchBusinessPosts(business.id);
+  const caption = captionFor(posts.find((p) => p.id === trigger.post_id));
+  if (!caption) return false;
+
+  // Mark the trigger as auto-resolved before launching so a concurrent
+  // owner reply (a race, not the common case) can't double-launch the boost.
+  await supabase
+    .from("boost_trigger")
+    .update({ owner_response: "auto", responded_at: new Date().toISOString(), handed_off_to_marketing: true })
+    .eq("id", trigger.id);
+
+  await launchBoost(business, trigger, caption, budgetCents);
+  return true;
+}
+
 /** Handles an inbound BOOST YES/NO reply: launches the ad on approval, marks declined otherwise. */
 export async function handleBoostReply(business: Business, body: string): Promise<void> {
   const { decision, budgetCents: requestedBudgetCents } = parseBoostReply(body);
   if (decision === "unknown") return;
 
-  const { data: posts, error: postsError } = await supabase
-    .from("post")
-    .select("*, content_item:content_item_id(business_id, caption, caption_variant_b)")
-    .returns<(Post & { content_item: { business_id: string; caption: string; caption_variant_b: string | null } | null })[]>();
-  if (postsError) throw postsError;
-
-  const businessPostIds = (posts ?? [])
-    .filter((p) => p.content_item?.business_id === business.id)
-    .map((p) => p.id);
+  const posts = await fetchBusinessPosts(business.id);
+  const businessPostIds = posts.map((p) => p.id);
 
   const { data: pending, error: triggerError } = await supabase
     .from("boost_trigger")
@@ -101,23 +164,7 @@ export async function handleBoostReply(business: Business, body: string): Promis
 
   if (decision !== "yes") return;
 
-  const post = (posts ?? []).find((p) => p.id === trigger.post_id);
-  // Phase 8.1: the boost_trigger may point at the winning "b" post when a
-  // staggered A/B test ran — boost the caption that actually won, not
-  // always the "a" variant's text.
-  const caption = (post?.variant === "b" ? post.content_item?.caption_variant_b : post?.content_item?.caption) ?? "";
-
-  const organization = await getOrganizationForBusiness(business);
-  const defaultBudgetCents = resolveBusinessSetting(business, organization, "boost_budget_cents", DEFAULT_BUDGET_CENTS);
-  const budgetCents = requestedBudgetCents ? clampBudget(requestedBudgetCents, defaultBudgetCents) : defaultBudgetCents;
-  const creative = await generateAdCreative(business, caption);
-  const result =
-    trigger.ad_platform === "google"
-      ? await launchGoogleCampaign(business, creative, budgetCents)
-      : await launchMetaCampaign(business, creative, budgetCents);
-
-  await supabase
-    .from("boost_trigger")
-    .update({ ad_campaign_id: result.campaignId, budget_cents: budgetCents })
-    .eq("id", trigger.id);
+  const caption = captionFor(posts.find((p) => p.id === trigger.post_id));
+  const budgetCents = await resolveBudgetCents(business, requestedBudgetCents);
+  await launchBoost(business, trigger, caption, budgetCents);
 }

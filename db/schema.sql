@@ -711,3 +711,14 @@ alter table post add column if not exists variant text not null default 'a'; -- 
 
 drop index if exists idx_post_unique_item_platform;
 create unique index if not exists idx_post_unique_item_platform_variant on post(content_item_id, platform, variant);
+
+-- 8.2: per-business boost policy (doc §18) — every field defaults to null,
+-- meaning "behave exactly as today, always ask the owner."
+alter table business add column if not exists max_weekly_boost_spend_cents integer;
+alter table business add column if not exists max_daily_boost_spend_cents integer;
+alter table business add column if not exists max_boost_per_post_cents integer;
+alter table business add column if not exists auto_boost_threshold_cents integer;
+alter table business add column if not exists manual_approval_threshold_cents integer;
+alter table business add column if not exists boost_allowed_platforms text[];
+alter table business add column if not exists boost_stop_loss_cents integer;
+alter table business add column if not exists boost_budget_reset_schedule text; -- daily | weekly

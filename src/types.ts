@@ -257,6 +257,18 @@ export interface Business {
   owner_verification_code: string | null;
   owner_verification_code_expires_at: string | null;
   package_tier: PackageTier | null;
+  /** Phase 8.2 boost policy fields (doc §18) — all null means "behave
+   * exactly as today, always ask." Setting auto_boost_threshold_cents lets
+   * handleBoostReply/evaluateBoostTriggers launch a boost without an owner
+   * approval round-trip, gated by the rest of the fields below. */
+  max_weekly_boost_spend_cents: number | null;
+  max_daily_boost_spend_cents: number | null;
+  max_boost_per_post_cents: number | null;
+  auto_boost_threshold_cents: number | null;
+  manual_approval_threshold_cents: number | null;
+  boost_allowed_platforms: Platform[] | null;
+  boost_stop_loss_cents: number | null;
+  boost_budget_reset_schedule: "daily" | "weekly" | null;
 }
 
 /** Phase 6.7: the entitlement tier a business/org is on. Starter and
