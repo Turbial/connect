@@ -1,10 +1,12 @@
 # Connect — MightyMax Distribution Layer
 
-The MightyMax Visibility Engine's Distribution Layer: organic posting across 18
+The MightyMax Visibility Engine's Distribution Layer: organic posting across 36
 platforms (GBP, Facebook, Instagram, Pinterest, X, LinkedIn, Threads, Yelp, Nextdoor,
-Snapchat, TikTok, YouTube, WhatsApp, Reddit, Bluesky, Mastodon, Tumblr, WeChat) with
-SMS/email owner approval, an organic → paid boost trigger with real Meta/Google Ads
-campaign launch, and a review → content feedback loop fed by Reach.
+Snapchat, TikTok, YouTube, WhatsApp, Reddit, Bluesky, Mastodon, Tumblr, WeChat,
+Telegram, Discord, Medium, VK, LINE, Vimeo, Flickr, Foursquare, Bing Places, Apple
+Business Connect, Houzz, Angi, Thumbtack, Tripadvisor, OpenTable, Quora, Trustpilot,
+Yandex Business) with SMS/email owner approval, an organic → paid boost trigger with
+real Meta/Google Ads campaign launch, and a review → content feedback loop fed by Reach.
 Built standalone — integration with MotionBlue, TurboAd, and Reach is isolated behind
 clear module boundaries below.
 
@@ -12,9 +14,9 @@ clear module boundaries below.
 
 | Module | Responsibility |
 |---|---|
-| `src/content-engine` | Generates platform-tailored post copy + images/videos (DeepSeek + fal.ai). `connectedPlatforms()` determines which platforms a business posts to; `queueWeeklyContent` and `queueReviewTriggeredContent` (Phase 4) both fan out per-platform. TikTok/YouTube route through `generateVideo()` (fal.ai kling-video text-to-video) instead of the static-image path. Phase 9 adds SEO-optimized hashtag generation (`generateHashtags`, for platforms whose brief calls for hashtags), multi-language translation (`translateCaption`, driven by `business.preferred_language`), and sentiment-aware tone adjustment for review-triggered copy (`sentimentTone`, driven by the triggering review's star rating). |
+| `src/content-engine` | Generates platform-tailored post copy + images/videos (DeepSeek + fal.ai). `connectedPlatforms()` determines which platforms a business posts to; `queueWeeklyContent` and `queueReviewTriggeredContent` (Phase 4) both fan out per-platform. TikTok/YouTube route through `generateVideo()` (fal.ai kling-video text-to-video) instead of the static-image path. Phase 9 adds SEO-optimized hashtag generation (`generateHashtags`, for platforms whose brief calls for hashtags), multi-language translation (`translateCaption`, driven by `business.preferred_language`), and sentiment-aware tone adjustment for review-triggered copy (`sentimentTone`, driven by the triggering review's star rating). Phase 11 adds AI-generated image alt text for accessibility/SEO, trending-idea seeding to keep weekly content topical, and AI-drafted review-reply suggestions (`review.suggested_reply`). |
 | `src/approval` | Sends SMS (Twilio) or email and parses content YES/NO/EDIT replies (`index.ts`/`sms.ts`/`email.ts`) and boost BOOST YES/NO replies (`boost.ts`). |
-| `src/distribution` | Posts approved content across all 18 connected platforms. Each platform's API calls are isolated behind its own adapter (`gbp.ts`, `meta.ts`, `pinterest.ts`, `twitter.ts`, `linkedin.ts`, `threads.ts`, `yelp.ts`, `nextdoor.ts`, `snapchat.ts`, `tiktok.ts`, `youtube.ts`, `whatsapp.ts`, `reddit.ts`, `bluesky.ts`, `mastodon.ts`, `tumblr.ts`, `wechat.ts`); `index.ts` dispatches per item per platform. |
+| `src/distribution` | Posts approved content across all 36 connected platforms. Each platform's API calls are isolated behind its own adapter (`gbp.ts`, `meta.ts`, `pinterest.ts`, `twitter.ts`, `linkedin.ts`, `threads.ts`, `yelp.ts`, `nextdoor.ts`, `snapchat.ts`, `tiktok.ts`, `youtube.ts`, `whatsapp.ts`, `reddit.ts`, `bluesky.ts`, `mastodon.ts`, `tumblr.ts`, `wechat.ts`, `telegram.ts`, `discord.ts`, `medium.ts`, `vk.ts`, `line.ts`, `vimeo.ts`, `flickr.ts`, `foursquare.ts`, `bing.ts`, `applebusiness.ts`, `houzz.ts`, `angi.ts`, `thumbtack.ts`, `tripadvisor.ts`, `opentable.ts`, `quora.ts`, `trustpilot.ts`, `yandex.ts`); `index.ts` dispatches per item per platform. |
 | `src/performance` | Polls each connected platform's insights/analytics API for posted items. |
 | `src/trigger-engine` | Evaluates posted content against a views/engagement threshold and prompts the owner to approve a paid boost (Phase 3). |
 | `src/ads` | `creative.ts` generates ad copy/images from a high-performing organic post (TurboAd exposes no callable API, so this reimplements its DeepSeek/fal.ai pattern directly). `metaAds.ts`/`googleAds.ts` launch real, paused campaigns via the Meta Marketing API and Google Ads API. |
@@ -23,9 +25,12 @@ clear module boundaries below.
 | `src/seo-audit` | Phase 10: runs a local SEO/citation completeness audit (`runSeoAudit`) against the business's own NAP record, scoring it 0-100 and flagging gaps. |
 | `src/competitor-monitor` | Phase 10: tracks named competitors per business (`addCompetitor`) and captures rating/review-count snapshots over time via the Google Places API (`captureCompetitorSnapshots`). |
 | `src/listings` | Phase 10: syncs the business's canonical NAP info out to connected platforms' profiles (`syncListingInfo`), starting with GBP's Business Information API. |
+| `src/rank-tracker` | Phase 11: tracks a business's local search rank for a keyword (`trackRank`) by Text Search-ing the keyword near the business and locating its own listing in the result order via the Google Places API. |
+| `src/sentiment-tracker` | Phase 11: captures a rolling 30-day avg-rating/review-count snapshot (`captureSentimentTrend`) from stored Reach reviews. |
+| `src/duplicate-listing-check` | Phase 11: flags potential duplicate/competing Google Business Profile listings (`checkDuplicateListings`) by Text Search-ing the business's own name and name-matching against its known listing. |
 | `src/jobs/weeklyBatch.ts` | Cron entrypoint: generate → request approval → resolve timeouts → post approved → send report. |
 | `src/jobs/collectPerformance.ts` | Cron entrypoint: poll insights for all businesses, then evaluate boost triggers. |
-| `src/jobs/runServiceModules.ts` | Cron entrypoint: runs the SEO audit, competitor snapshot capture, and listing sync for all businesses (`npm run services`). |
+| `src/jobs/runServiceModules.ts` | Cron entrypoint: runs the SEO audit, competitor snapshot capture, listing sync, rank tracking, sentiment trend capture, and duplicate listing check for all businesses (`npm run services`). |
 | `src/index.ts` | HTTP server for Twilio's inbound SMS webhook (`/webhooks/sms`, disambiguating content vs. boost replies) and Reach's review webhook (`/webhooks/reach-review`). |
 
 ## Setup
@@ -105,3 +110,13 @@ clear module boundaries below.
   partner access — extend platform-by-platform as those are confirmed.
 - `src/competitor-monitor` only tracks GBP-based competitors (via Places API place
   id); competitors without a Google Business Profile aren't trackable yet.
+- Exact API endpoints for Apple Business Connect, Angi, Thumbtack, and Houzz are
+  inferred from public docs/partner-program descriptions and need verification once
+  partner access is granted for each.
+- OAuth/auth model varies widely across the 18 Phase 11 platforms (full OAuth client
+  id/secret, simple API keys, cert-based signing, channel-scoped secrets, or no
+  app-level credential at all) — see `.env.example` for the per-platform breakdown.
+- `src/rank-tracker` and `src/duplicate-listing-check` match a business's own listing
+  by exact/substring Places id comparison (or name fallback for rank); this is a
+  best-effort heuristic and may mis-rank or mis-flag for businesses with very common
+  names or unconfirmed GBP listings.

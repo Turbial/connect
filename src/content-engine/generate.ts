@@ -23,13 +23,31 @@ const PLATFORM_BRIEF: Record<Platform, string> = {
   mastodon: "a short, conversational post (under 500 characters) for Mastodon, written for a niche, community-minded audience, with 1-2 relevant hashtags.",
   tumblr: "a short, expressive post (under 250 characters) for Tumblr, casual and a little playful, 3-5 relevant tags at the end.",
   wechat: "a short business update (under 200 characters) for a WeChat Official Account post, factual and respectful in tone, no hashtags.",
+  telegram: "a short, direct broadcast post (under 300 characters) for a Telegram channel, informative and to the point, no hashtags.",
+  discord: "a short, casual announcement (under 300 characters) for a Discord community channel, friendly and informal, no hashtags.",
+  medium: "a short-form article opener (under 600 characters) for Medium, reflective and a little narrative, no hashtags in the body.",
+  vk: "a short, friendly post (under 300 characters) for VK, conversational, 2-3 relevant hashtags.",
+  line: "a short, warm broadcast message (under 200 characters) for a LINE Official Account, personal and direct, no hashtags.",
+  vimeo: "a short, descriptive caption (under 150 characters) for a Vimeo video upload, clear and professional, no hashtags.",
+  flickr: "a short, evocative photo caption (under 200 characters) for Flickr, descriptive of the image, 3-5 relevant tags.",
+  foursquare: "a short tip (under 200 characters) for a Foursquare venue page, helpful and specific, no hashtags.",
+  bing: "a short business update (under 300 characters) for a Bing Places listing, factual and clear, no hashtags.",
+  applebusiness: "a short showcase update (under 250 characters) for an Apple Business Connect listing, polished and concise, no hashtags.",
+  houzz: "a short project highlight (under 300 characters) for Houzz, craftsmanship-focused, no hashtags.",
+  angi: "a short, trustworthy update (under 300 characters) for an Angi business profile, focused on reliability and quality of work, no hashtags.",
+  thumbtack: "a short, professional update (under 300 characters) for a Thumbtack profile, emphasizing responsiveness and expertise, no hashtags.",
+  tripadvisor: "a short management update (under 300 characters) for a Tripadvisor listing, welcoming and specific, no hashtags.",
+  opentable: "a short update (under 250 characters) for an OpenTable restaurant profile, inviting and specific about the dining experience, no hashtags.",
+  quora: "a short, helpful answer-style post (under 400 characters) for a Quora Space, genuinely informative, no hashtags.",
+  trustpilot: "a short, gracious public response (under 300 characters) for a Trustpilot business profile, appreciative and professional, no hashtags.",
+  yandex: "a short business update (under 300 characters) for a Yandex Business listing, factual and clear, no hashtags.",
 };
 
 /** Platforms that require a video asset rather than a static image. */
-const VIDEO_PLATFORMS = new Set<Platform>(["tiktok", "youtube"]);
+const VIDEO_PLATFORMS = new Set<Platform>(["tiktok", "youtube", "vimeo"]);
 
 /** Platforms whose brief calls for hashtags, where SEO-optimized hashtag generation adds value. */
-const HASHTAG_PLATFORMS = new Set<Platform>(["instagram", "pinterest", "twitter", "tiktok", "mastodon", "tumblr"]);
+const HASHTAG_PLATFORMS = new Set<Platform>(["instagram", "pinterest", "twitter", "tiktok", "mastodon", "tumblr", "vk", "flickr"]);
 
 /** Maps a review's star rating to a tone descriptor for sentiment-aware review-triggered
  * copy. Reviews below MIN_RATING_FOR_CONTENT (4) never reach here in practice, but this
@@ -100,6 +118,30 @@ async function translateCaption(caption: string, language: string): Promise<stri
     `Translate the following social media post into ${language}, preserving its tone and keeping any hashtags as-is: "${caption}"`
   );
   return result ?? caption;
+}
+
+/** Generates accessibility alt-text for the post's image/video, as a separate
+ * pass since it describes the visual rather than the caption's marketing copy. */
+async function generateAltText(business: Business, caption: string): Promise<string | null> {
+  return callDeepSeek(
+    `Write a concise, descriptive accessibility alt-text (under 125 characters) for the image/video accompanying this post from ${business.name}: "${caption}". Describe what's visually shown, not the marketing message. Respond with only the alt-text.`
+  );
+}
+
+/** Generates a locally-relevant trending content idea to seed a weekly content
+ * brief, so queued posts aren't generic when no review/event context exists. */
+export async function generateTrendingIdea(business: Business): Promise<string | null> {
+  return callDeepSeek(
+    `Suggest one specific, locally-relevant, currently-trending content idea for ${business.name} in ${business.location ?? "the local area"}. Respond with one concise sentence, no preamble.`
+  );
+}
+
+/** Drafts a suggested public reply to a customer review, for the owner to
+ * review/edit/send rather than auto-posting. */
+export async function generateReviewReplyDraft(business: Business, review: { rating: number | null; text: string | null; customer_name: string | null }): Promise<string | null> {
+  return callDeepSeek(
+    `Draft a short, genuine public reply from ${business.name} to this ${review.rating ?? "?"}-star review from ${review.customer_name ?? "a customer"}: "${review.text ?? ""}". Keep it under 300 characters, no generic corporate language.`
+  );
 }
 
 async function generateImage(business: Business, caption: string): Promise<string | null> {
@@ -176,5 +218,6 @@ export async function generatePost(
 
   const mediaType: MediaType = VIDEO_PLATFORMS.has(platform) ? "video" : "image";
   const mediaUrl = mediaType === "video" ? await generateVideo(business, caption) : await generateImage(business, caption);
-  return { caption, mediaUrl, mediaType };
+  const altText = await generateAltText(business, caption);
+  return { caption, mediaUrl, mediaType, altText };
 }

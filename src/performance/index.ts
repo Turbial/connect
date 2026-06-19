@@ -16,6 +16,24 @@ import { fetchBlueskyInsights } from "../distribution/bluesky.js";
 import { fetchMastodonInsights } from "../distribution/mastodon.js";
 import { fetchTumblrInsights } from "../distribution/tumblr.js";
 import { fetchWechatInsights } from "../distribution/wechat.js";
+import { fetchTelegramInsights } from "../distribution/telegram.js";
+import { fetchDiscordInsights } from "../distribution/discord.js";
+import { fetchMediumInsights } from "../distribution/medium.js";
+import { fetchVkInsights } from "../distribution/vk.js";
+import { fetchLineInsights } from "../distribution/line.js";
+import { fetchVimeoInsights } from "../distribution/vimeo.js";
+import { fetchFlickrInsights } from "../distribution/flickr.js";
+import { fetchFoursquareInsights } from "../distribution/foursquare.js";
+import { fetchBingInsights } from "../distribution/bing.js";
+import { fetchApplebusinessInsights } from "../distribution/applebusiness.js";
+import { fetchHouzzInsights } from "../distribution/houzz.js";
+import { fetchAngiInsights } from "../distribution/angi.js";
+import { fetchThumbtackInsights } from "../distribution/thumbtack.js";
+import { fetchTripadvisorInsights } from "../distribution/tripadvisor.js";
+import { fetchOpentableInsights } from "../distribution/opentable.js";
+import { fetchQuoraInsights } from "../distribution/quora.js";
+import { fetchTrustpilotInsights } from "../distribution/trustpilot.js";
+import { fetchYandexInsights } from "../distribution/yandex.js";
 import type { Business, Post } from "../types.js";
 
 async function fetchInsight(business: Business, post: Post, platformPostId: string) {
@@ -35,7 +53,26 @@ async function fetchInsight(business: Business, post: Post, platformPostId: stri
   if (post.platform === "bluesky") return fetchBlueskyInsights(business, platformPostId);
   if (post.platform === "mastodon") return fetchMastodonInsights(business, platformPostId);
   if (post.platform === "tumblr") return fetchTumblrInsights(business, platformPostId);
-  return fetchWechatInsights(business, platformPostId);
+  if (post.platform === "wechat") return fetchWechatInsights(business, platformPostId);
+  if (post.platform === "telegram") return fetchTelegramInsights(business, platformPostId);
+  if (post.platform === "discord") return fetchDiscordInsights(business, platformPostId);
+  if (post.platform === "medium") return fetchMediumInsights(business, platformPostId);
+  if (post.platform === "vk") return fetchVkInsights(business, platformPostId);
+  if (post.platform === "line") return fetchLineInsights(business, platformPostId);
+  if (post.platform === "vimeo") return fetchVimeoInsights(business, platformPostId);
+  if (post.platform === "flickr") return fetchFlickrInsights(business, platformPostId);
+  if (post.platform === "foursquare") return fetchFoursquareInsights(business, platformPostId);
+  if (post.platform === "bing") return fetchBingInsights(business, platformPostId);
+  if (post.platform === "applebusiness") return fetchApplebusinessInsights(business, platformPostId);
+  if (post.platform === "houzz") return fetchHouzzInsights(business, platformPostId);
+  if (post.platform === "angi") return fetchAngiInsights(business, platformPostId);
+  if (post.platform === "thumbtack") return fetchThumbtackInsights(business, platformPostId);
+  if (post.platform === "tripadvisor") return fetchTripadvisorInsights(business, platformPostId);
+  if (post.platform === "opentable") return fetchOpentableInsights(business, platformPostId);
+  if (post.platform === "quora") return fetchQuoraInsights(business, platformPostId);
+  if (post.platform === "trustpilot") return fetchTrustpilotInsights(business, platformPostId);
+  if (post.platform === "yandex") return fetchYandexInsights(business, platformPostId);
+  throw new Error(`Unsupported platform: ${post.platform}`);
 }
 
 /** Polls per-platform insights for a business's posted items and updates stored metrics. */

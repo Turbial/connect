@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase.js";
 import { queueReviewTriggeredContent } from "../content-engine/index.js";
+import { generateReviewReplyDraft } from "../content-engine/generate.js";
 import type { Business } from "../types.js";
 
 export interface ReachReviewPayload {
@@ -34,14 +35,22 @@ export async function handleReachReview(payload: ReachReviewPayload): Promise<vo
     .single();
   if (error) throw error;
 
-  if (!payload.text || (payload.rating ?? 0) < MIN_RATING_FOR_CONTENT) return;
-
   const { data: business, error: businessError } = await supabase
     .from("business")
     .select("*")
     .eq("id", payload.business_id)
     .single();
   if (businessError) throw businessError;
+
+  if (payload.text) {
+    const suggestedReply = await generateReviewReplyDraft(business as Business, payload);
+    if (suggestedReply) {
+      const { error: replyError } = await supabase.from("review").update({ suggested_reply: suggestedReply }).eq("id", review.id);
+      if (replyError) throw replyError;
+    }
+  }
+
+  if (!payload.text || (payload.rating ?? 0) < MIN_RATING_FOR_CONTENT) return;
 
   await queueReviewTriggeredContent(business as Business, review.id, buildBrief(payload), payload.rating);
 }

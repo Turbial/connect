@@ -212,3 +212,79 @@ create index if not exists idx_seo_audit_business on seo_audit(business_id);
 create index if not exists idx_competitor_business on competitor(business_id);
 create index if not exists idx_competitor_snapshot_competitor on competitor_snapshot(competitor_id);
 create index if not exists idx_listing_sync_business on listing_sync(business_id);
+
+-- ── Phase 11: double platforms, AI capabilities, and service modules ───────
+-- Doubles organic platform coverage (18 → 36), Content Engine AI capabilities
+-- (3 → 6: hashtags/translation/sentiment-tone → + alt-text/trending-idea/
+-- review-reply-draft), and service modules (3 → 6: seo-audit/competitor-
+-- monitor/listings → + rank-tracker/sentiment-tracker/duplicate-listing-check).
+
+alter table business add column if not exists telegram_channel_id text;
+alter table business add column if not exists telegram_access_token text;
+alter table business add column if not exists discord_channel_id text;
+alter table business add column if not exists discord_access_token text;
+alter table business add column if not exists medium_publication_id text;
+alter table business add column if not exists medium_access_token text;
+alter table business add column if not exists vk_group_id text;
+alter table business add column if not exists vk_access_token text;
+alter table business add column if not exists line_channel_id text;
+alter table business add column if not exists line_access_token text;
+alter table business add column if not exists vimeo_user_id text;
+alter table business add column if not exists vimeo_access_token text;
+alter table business add column if not exists flickr_user_id text;
+alter table business add column if not exists flickr_access_token text;
+alter table business add column if not exists foursquare_venue_id text;
+alter table business add column if not exists foursquare_access_token text;
+alter table business add column if not exists bing_business_id text;
+alter table business add column if not exists bing_access_token text;
+alter table business add column if not exists applebusiness_location_id text;
+alter table business add column if not exists applebusiness_access_token text;
+alter table business add column if not exists houzz_business_id text;
+alter table business add column if not exists houzz_access_token text;
+alter table business add column if not exists angi_business_id text;
+alter table business add column if not exists angi_access_token text;
+alter table business add column if not exists thumbtack_business_id text;
+alter table business add column if not exists thumbtack_access_token text;
+alter table business add column if not exists tripadvisor_location_id text;
+alter table business add column if not exists tripadvisor_access_token text;
+alter table business add column if not exists opentable_restaurant_id text;
+alter table business add column if not exists opentable_access_token text;
+alter table business add column if not exists quora_space_id text;
+alter table business add column if not exists quora_access_token text;
+alter table business add column if not exists trustpilot_business_unit_id text;
+alter table business add column if not exists trustpilot_access_token text;
+alter table business add column if not exists yandex_business_id text;
+alter table business add column if not exists yandex_access_token text;
+
+alter table content_item add column if not exists alt_text text;
+alter table review add column if not exists suggested_reply text;
+
+create table if not exists rank_snapshot (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  keyword text not null,
+  rank integer,
+  captured_at timestamptz not null default now()
+);
+
+create table if not exists sentiment_trend (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  avg_rating numeric not null,
+  review_count integer not null,
+  period_start timestamptz not null,
+  period_end timestamptz not null
+);
+
+create table if not exists duplicate_listing_flag (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  candidate_place_id text not null,
+  candidate_name text not null,
+  candidate_address text,
+  detected_at timestamptz not null default now()
+);
+
+create index if not exists idx_rank_snapshot_business on rank_snapshot(business_id);
+create index if not exists idx_sentiment_trend_business on sentiment_trend(business_id);
+create index if not exists idx_duplicate_listing_flag_business on duplicate_listing_flag(business_id);

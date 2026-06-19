@@ -3,6 +3,9 @@ import { supabase } from "../lib/supabase.js";
 import { runSeoAudit } from "../seo-audit/index.js";
 import { captureCompetitorSnapshots } from "../competitor-monitor/index.js";
 import { syncListingInfo } from "../listings/index.js";
+import { trackRank } from "../rank-tracker/index.js";
+import { captureSentimentTrend } from "../sentiment-tracker/index.js";
+import { checkDuplicateListings } from "../duplicate-listing-check/index.js";
 import type { Business } from "../types.js";
 
 async function main(): Promise<void> {
@@ -13,6 +16,9 @@ async function main(): Promise<void> {
     await runSeoAudit(business);
     await captureCompetitorSnapshots(business);
     await syncListingInfo(business);
+    await trackRank(business, business.name);
+    await captureSentimentTrend(business);
+    await checkDuplicateListings(business);
   }
 }
 
