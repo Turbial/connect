@@ -762,3 +762,6 @@ create table if not exists agent_action (
 );
 
 create index if not exists idx_agent_action_business on agent_action(business_id, created_at);
+
+-- ── Phase 9.3: repeated negative-review complaint theme detection ───────────
+alter table review add column if not exists complaint_theme text;

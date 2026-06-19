@@ -5,6 +5,7 @@ import { isLivePlatform } from "../lib/platformStatus.js";
 import { getConnectionSummary } from "../lib/platformConnection.js";
 import { getLeadEventsForBusiness } from "../lib/leadEvents.js";
 import { getLeadIntentMessages } from "../lib/customerMessaging.js";
+import { findRepeatedComplaintThemes, THEME_LABELS } from "../lib/complaintThemes.js";
 import { getOrganizationForBusiness, orgDisplayName } from "../lib/orgSettings.js";
 import { getLatestVisibilityScore, getRankedOrgVisibilityRollup } from "../visibility-score/index.js";
 import { getRecentlyResolvedFixes } from "../lib/nextBestFix.js";
@@ -194,6 +195,14 @@ export async function buildWeeklyReport(business: Business): Promise<string> {
 
   if (score?.nextBestFix) {
     lines.push(`👉 Next best fix: ${score.nextBestFix}`);
+  }
+
+  // Phase 9.3: a 30-day window, not the weekly one above — a repeated theme
+  // is a pattern across reviews accumulated over time, not just this week's.
+  const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const repeatedThemes = await findRepeatedComplaintThemes(business.id, monthAgo);
+  for (const { theme, count } of repeatedThemes) {
+    lines.push(`📝 ${count} reviews this month mentioned ${THEME_LABELS[theme]} — worth a look.`);
   }
 
   return lines.join("\n");

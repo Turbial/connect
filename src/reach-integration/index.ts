@@ -3,6 +3,7 @@ import { queueReviewTriggeredContent } from "../content-engine/index.js";
 import { generateReviewReplyDraft } from "../content-engine/generate.js";
 import { requestApproval } from "../approval/index.js";
 import { sendApprovalMessage } from "../approval/channel.js";
+import { classifyComplaintTheme } from "../lib/complaintThemes.js";
 import type { Business } from "../types.js";
 
 export interface ReachReviewPayload {
@@ -40,6 +41,15 @@ export async function handleReachReview(payload: ReachReviewPayload): Promise<vo
     .select()
     .single();
   if (error) throw error;
+
+  // Phase 9.3: classify negative reviews into a fixed complaint theme,
+  // best-effort — a failed/unavailable classification just leaves the
+  // review unthemed, it never blocks the reply-draft/escalation flow below.
+  const complaintTheme = await classifyComplaintTheme(payload.rating, payload.text);
+  if (complaintTheme) {
+    const { error: themeError } = await supabase.from("review").update({ complaint_theme: complaintTheme }).eq("id", review.id);
+    if (themeError) throw themeError;
+  }
 
   const { data: business, error: businessError } = await supabase
     .from("business")

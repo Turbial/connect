@@ -430,7 +430,15 @@ export interface Review {
   customer_name: string | null;
   received_at: string;
   suggested_reply: string | null;
+  /** Phase 9.3: the negative-review complaint category this review was
+   * classified into, or null if it wasn't negative/classifiable. */
+  complaint_theme: ComplaintTheme | null;
 }
+
+/** Phase 9.3: a fixed, bounded set of negative-review complaint categories —
+ * never an open-ended/freeform label, so theme counts stay comparable across
+ * reviews. */
+export type ComplaintTheme = "slow_response" | "price" | "quality" | "communication" | "scheduling" | "other";
 
 export interface GeneratedPost {
   caption: string;
