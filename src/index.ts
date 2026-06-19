@@ -12,8 +12,9 @@ import { platformStatusReport } from "./lib/platformStatus.js";
 import { handleMissedCall } from "./lib/missedCallTextback.js";
 import { recordCustomerMessage, getLatestInboundChannel } from "./lib/customerMessaging.js";
 import { sendApprovalSms } from "./approval/sms.js";
-import { whatsappButtonToText } from "./approval/whatsapp.js";
+import { sendApprovalWhatsapp, whatsappButtonToText } from "./approval/whatsapp.js";
 import { sendOwnerVerificationCode, confirmOwnerVerification } from "./lib/ownerVerification.js";
+import { classifyChatIntent, buildChatIntentReply } from "./chat/scoreCard.js";
 import type { Business, Platform } from "./types.js";
 
 /** Phase 7.1: dispatches a decision (already-resolved text, e.g. "yes"/"no"/
@@ -65,6 +66,17 @@ async function handleSmsWebhook(req: http.IncomingMessage, res: http.ServerRespo
     return;
   }
 
+  // Phase 7.2: show_score/whats_next chat intents are checked before the
+  // boost/edit/approval dispatch — neither overlaps with YES/NO/EDIT/BOOST
+  // syntax, so this can't intercept a real approval decision.
+  const intent = classifyChatIntent(text);
+  if (intent) {
+    const reply = await buildChatIntentReply(resolvedBusiness.id, intent);
+    if (resolvedBusiness.owner_phone) await sendApprovalSms(resolvedBusiness.owner_phone, reply);
+    res.writeHead(200, { "Content-Type": "text/xml" }).end("<Response></Response>");
+    return;
+  }
+
   // A BOOST-prefixed reply, or any pending boost prompt, takes priority over content approval
   // so an owner replying to a boost SMS with plain "yes" still resolves the boost, not content.
   await dispatchApprovalReply(resolvedBusiness as Business, text);
@@ -108,6 +120,16 @@ async function handleWhatsappWebhook(req: http.IncomingMessage, res: http.Server
 
   if (!business) {
     res.writeHead(404).end();
+    return;
+  }
+
+  // Phase 7.2: only a free-text reply (not a button-click id) can carry a
+  // show_score/whats_next intent.
+  const intent = classifyChatIntent(rawReply);
+  if (intent) {
+    const reply = await buildChatIntentReply(business.id, intent);
+    await sendApprovalWhatsapp(from, reply);
+    res.writeHead(200).end();
     return;
   }
 
