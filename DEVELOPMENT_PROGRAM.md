@@ -7,70 +7,48 @@ This is the actionable build plan: what gets built, in what order, and why.
 
 > Stop multiplying surface area. Prove the core loop. Let the agent layer scale it.
 
-Every task below exists to serve one of three goals, in priority order:
+Every task below exists to serve one of these goals, in priority order:
 1. **Truth** — stop misrepresenting what the system actually does.
 2. **Reliability** — make the narrow real core trustworthy enough to run unsupervised.
-3. **Outcomes** — prove calls/leads/revenue, not impressions.
+3. **Usability** — remove every step that currently requires a developer (onboarding,
+   reconnection, EDIT handling, boost activation).
+4. **Adaptability** — let the product flex per business/agency/franchise without
+   forking code (settings, brand voice, hierarchy, multi-location).
+5. **Outcomes** — prove calls/leads/revenue, not impressions.
 
-No new platforms, no new AI capabilities, no new service modules until Phase 1 and
-Phase 2 are done. Breadth work is frozen.
+No new platforms, no new AI capabilities, no new service modules for their own sake.
+Breadth work only resumes once it's in service of usability/adaptability/outcomes
+(e.g. "add platform X because a real customer needs it," not "double the count").
 
 ---
 
-## Phase 1 — Truth & Reliability (Days 1–30)
+## Phase 1 — Truth & Reliability (Days 1–30) — ✅ DONE
 
 **Goal:** every claim the system makes about itself is true, and a failed post is
 visible instead of silent.
 
-### 1.1 Platform status taxonomy
-- Add a `platform_status` enum to the platform-connection model:
-  `verified | sandbox | partner_gated | stub | unsupported`.
-- Tag all 108 current platforms against this taxonomy (36 Tier-1 adapters get
-  individually reviewed and downgraded where partner access / API confirmation
-  is still pending; all 72 Tier-2 generic adapters get tagged `stub`).
-- Distribution dispatch and reporting both read this status field.
+- **1.1 Platform status taxonomy** — `src/lib/platformStatus.ts` tags every
+  platform `verified | sandbox | partner_gated | stub | unsupported`.
+- **1.2 Stop reporting fake activity** — distribution skips dispatch entirely
+  for `stub`/`unsupported` platforms; the weekly digest filters defensively to
+  live platforms only.
+- **1.3 Reliability primitives** — `withRetry` exponential backoff around all
+  platform dispatch, idempotent `post` upsert on `(content_item_id, platform)`,
+  failures logged to `distribution_failure` instead of thrown-and-lost.
+- **1.4 Brand-risk defaults** — `timeout_action` defaults to `hold` everywhere;
+  `getEditQueue()` surfaces pending EDIT replies instead of letting them vanish.
 
-### 1.2 Stop reporting fake activity
-- `postToPlatform`/generic adapter: a `stub`-status platform must not write a
-  `post` row that reporting treats as a successful publish. Either skip
-  dispatch entirely for `stub`/`unsupported` platforms, or write the row with
-  a `status: "not_active"` marker that the weekly digest and any future
-  dashboard explicitly filter out.
-- Weekly digest (`src/reporting`): only count/list posts where the target
-  platform's status is `verified` (or `sandbox` for internal/pilot accounts
-  explicitly flagged as such).
-- Audit `connectedPlatforms()` so a business is only treated as "posting to N
-  platforms" for platforms that are actually `verified`.
-
-### 1.3 Reliability primitives
-- Add retry-with-exponential-backoff wrapper for all outbound platform/API
-  calls (distribution, performance polling, ads).
-- Add an idempotency key per (content_item_id, platform) for post dispatch to
-  prevent duplicate live posts on retry.
-- Add structured failure logging for every adapter call (platform, business,
-  error, timestamp) — queryable, not just thrown/swallowed.
-
-### 1.4 Brand-risk defaults
-- Flip `timeout_action` default for new businesses from `auto_post` to `hold`.
-  `auto_post` becomes an explicit opt-in, not the default.
-- Build a minimal EDIT queue: a table/view of content items in `edited` status
-  with the owner's requested change, so EDIT replies resolve to a concrete
-  next action instead of disappearing.
-
-### Phase 1 exit criteria
-- No stub/unsupported platform ever appears as a completed post in any
-  customer-facing report.
-- Every post dispatch is retried on transient failure and cannot duplicate.
-- Every failure is logged and queryable.
-- New businesses default to approval-required, not auto-post.
-- EDIT replies land somewhere actionable.
+**Exit criteria met:** no stub platform can appear as a completed post; dispatch
+retries and cannot duplicate; failures are logged and queryable; new businesses
+default to approval-required; EDIT replies land somewhere actionable.
 
 ---
 
 ## Phase 2 — Front Door & Verified Core (Days 31–60)
 
-**Goal:** a business can be onboarded and kept running without hand-seeding
-the database.
+**Goal:** a business can be onboarded, stay connected, and keep posting without
+a developer touching the database. This is the single biggest usability gap —
+the product cannot scale past hand-seeded pilot accounts without it.
 
 ### 2.1 Normalize platform connections
 - Replace the 108×2 columns on `business` with a `platform_connection` table:
@@ -79,28 +57,35 @@ the database.
   last_posted_at, last_metrics_sync_at, failure_reason, created_at, updated_at`.
 - Migrate existing `business.<platform>_id`/`<platform>_access_token` data into
   this table; update every adapter and `connectedPlatforms()` to read from it.
+- This is also the adaptability fix: today adding a platform means adding two
+  columns to `business`; after this, it's a row in a table.
 
 ### 2.2 Pick and verify the real core
 - Select 5–10 platforms to take to `verified` status end-to-end this phase
-  (candidates per the assessment: GBP, Facebook, Instagram, LinkedIn, one of
-  TikTok/YouTube Shorts, plus listings/review platforms where access is
-  confirmed).
-- For each: confirm OAuth flow, confirm posting works, confirm insights
-  fetch works, confirm token refresh works, confirm failure visibility works.
-- Everything not in this verified set stays `sandbox`/`partner_gated`/`stub`
-  and stays out of customer-facing reporting per Phase 1.1.
+  (candidates: GBP, Facebook, Instagram, LinkedIn, one of TikTok/YouTube
+  Shorts, plus a listings/review platform where access is confirmed).
+- For each: confirm OAuth flow, posting, insights fetch, token refresh, and
+  failure visibility.
+- Everything outside this verified set stays `sandbox`/`partner_gated`/`stub`
+  and stays out of customer-facing reporting (Phase 1.2 already enforces this).
 
-### 2.3 Onboarding & connection center
-- Minimal UI/flow for: business setup, OAuth connect per platform, approval
-  channel setup (SMS/email), boost budget/threshold settings, brand voice
-  basics.
-- Connection center surfaces per platform: connected / missing permissions /
-  expired token / failed refresh / last successful post / last metrics sync /
-  action required.
-- Token expiry monitoring job that flags `platform_connection` rows needing
-  reconnection before they silently fail.
+### 2.3 Self-serve onboarding & connection center
+- Minimal UI/flow: business setup, OAuth connect per platform, approval
+  channel setup (SMS/email), boost budget/threshold, brand-voice basics.
+- Connection center per platform: connected / missing permissions / expired
+  token / failed refresh / last successful post / last metrics sync / action
+  required — the owner fixes their own problems instead of filing a ticket.
+- Token expiry monitoring job flags `platform_connection` rows needing
+  reconnection before they silently fail mid-week.
 
-### 2.4 Reporting accuracy
+### 2.4 Per-business adaptability settings
+- Settings live on `platform_connection`/`business` and actually change
+  behavior, not just get stored: preferred platforms, posting cadence,
+  approval policy, boost threshold/budget, brand-voice basics (banned
+  words/claims, tone, approved services). The content engine and approval
+  flow read these instead of using fixed constants.
+
+### 2.5 Reporting accuracy
 - Weekly report explicitly separates: posts published, posts pending, posts
   failed, platforms needing reconnection. No blended "activity" number.
 
@@ -110,13 +95,14 @@ the database.
 - 5–10 platforms are genuinely `verified` (real OAuth, real posts, real
   metrics, real token refresh).
 - Owners can see and fix their own connection problems.
+- Per-business settings actually change system behavior.
 
 ---
 
 ## Phase 3 — ROI & Agent Operations (Days 61–90)
 
 **Goal:** reports show business outcomes, and routine exceptions are handled
-by agents instead of humans.
+by agents instead of humans. This is the core moat per the assessment.
 
 ### 3.1 Outcome attribution
 - UTM-tag every link Connect generates.
@@ -133,12 +119,12 @@ by agents instead of humans.
   customer-facing score with a category breakdown (listings, reviews, website
   health, search presence, social activity, content freshness, competitor
   strength, ads readiness, response rate, profile completeness).
-- Every score gap maps to a concrete recommended action (not just a number).
+- Every score gap maps to a concrete recommended action — audit without
+  action is a report, audit with agents is a product.
 
 ### 3.3 Agent-handled exceptions
 - EDIT requests get an agent-drafted rewrite attached automatically, with the
-  owner approving the rewrite via the existing SMS/email channel rather than
-  a human handling it manually.
+  owner approving the rewrite via the existing SMS/email channel.
 - Boost flow redesigned to one of two models (decide before building):
   - **Recommendation-only**: owner is notified a post is performing well; no
     campaign object is created until a human/operator acts.
@@ -157,27 +143,78 @@ by agents instead of humans.
 
 ---
 
-## Explicitly Deferred (post-90-day, category-leadership track)
+## Phase 4 — Adaptability at Scale: Agencies & Multi-Location (Days 91–120)
 
-Not started until Phases 1–3 are done and the core loop is proven:
-- Expanding `verified` platform count beyond the initial 5–10.
-- Agency/multi-location data model (organizations, locations, hierarchical
-  approvals, white-label, bulk publishing, consolidated billing).
-- Distributed worker/queue architecture (Temporal/SQS/BullMQ) — current cron
-  jobs are acceptable until volume requires it.
-- Two-way customer messaging (missed-call text-back, web chat, DM inbox).
-- Brand voice/compliance engine beyond basic settings.
-- Partner-facing API (platforms integrating into Connect rather than the
-  reverse).
+**Goal:** the highest-value customers (agencies, franchises, multi-location
+brands) are usable without forking the data model per customer type.
+
+### 4.1 Organization/location hierarchy
+- Introduce `organization` above `business`, with `business` becoming
+  `location` rows under an org. Existing single-location businesses become
+  orgs of one — no special-casing.
+- Brand-level templates/settings with per-location overrides (cadence,
+  voice, approved offers) — adaptability means the override is a small diff,
+  not a new code path.
+
+### 4.2 Hierarchical approvals
+- Approval policy becomes a chain, not a single owner: local manager →
+  regional manager → brand compliance, each optional per org. SMS YES/NO
+  still works for the single-location case; the chain only activates when
+  configured.
+- Pre-approved content libraries and an emergency content pause that applies
+  at the org level.
+
+### 4.3 Bulk operations & white-label
+- Bulk publish/report across an org's locations.
+- White-label mode (agency-branded approval messages/reports) — config-driven,
+  not a fork.
+- Consolidated billing and per-location benchmarking in reporting.
+
+### Phase 4 exit criteria
+- An agency can manage N locations under one org without per-location custom
+  code.
+- A franchise can require regional/brand approval without breaking the
+  single-owner SMS flow for simpler accounts.
+
+---
+
+## Phase 5 — Durable Moats (Days 121+)
+
+**Goal:** make the product harder to copy, not just more complete.
+
+### 5.1 Partner access as a tracked risk, not a checklist item
+- Per platform, track: does a usable API exist, does it support posting on
+  behalf of unrelated businesses, is partner approval required/likely, what
+  are the content/rate-limit rules. This list — not the adapter file count —
+  is the real roadmap for platform expansion going forward.
+
+### 5.2 Local performance data flywheel
+- Once enough verified businesses are live, start aggregating (anonymized,
+  per-vertical) which content themes, posting times, and platforms correlate
+  with attributed leads/revenue from Phase 3 — feed this back into content
+  generation defaults per industry/vertical.
+
+### 5.3 Two-way messaging (only after the above is solid)
+- Missed-call text-back, web chat, DM inbox — extends the "owner approves by
+  text" interaction model the product is already built around, rather than
+  adding a separate dashboard surface.
+
+### 5.4 Partner-facing API
+- Once Connect has enough verified scale, invert the integration relationship
+  for the easiest platforms: they pull from Connect via a standard interface
+  instead of Connect maintaining a bespoke adapter per platform.
 
 ---
 
 ## What This Program Explicitly Stops Doing
 
-- No further "double/triple" platform-count expansions.
+- No further "double/triple" platform-count expansions for their own sake.
 - No new stub adapters added to the Tier-2 generic factory.
 - No new service-signal modules until existing ones drive a recommendation,
   not just a stored row.
-- No marketing or reporting language claiming "108 platforms" — internal and
-  external copy should say "adapter framework covering 100+ destinations,
-  with N platforms fully verified" until the verified count actually grows.
+- No marketing or reporting language claiming "108 platforms" — copy should
+  say "adapter framework covering 100+ destinations, with N platforms fully
+  verified" until the verified count actually grows.
+- No agency/multi-location modeling (Phase 4) until Phase 2's single-location
+  onboarding is real — adaptability features built on top of a fake core just
+  multiply the misrepresentation surface.
