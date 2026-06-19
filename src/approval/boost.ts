@@ -43,20 +43,22 @@ interface BoostReply {
   budgetCents: number | null;
 }
 
-function parseBoostReply(body: string): BoostReply {
+export function parseBoostReply(body: string): BoostReply {
   const normalized = body.trim().toLowerCase().replace(/^boost\s*/, "");
   const amountMatch = normalized.match(/\$?(\d+(?:\.\d{1,2})?)/);
   const budgetCents = amountMatch ? Math.round(parseFloat(amountMatch[1]) * 100) : null;
 
-  if (normalized.startsWith("yes") || normalized.startsWith("y")) return { decision: "yes", budgetCents };
-  if (normalized.startsWith("no") || normalized.startsWith("n")) return { decision: "no", budgetCents: null };
+  // Word-boundary anchored, not a plain startsWith — otherwise unrelated replies like
+  // "Nothing, thanks" or "November news" (which start with "no") would be misread as a decline.
+  if (/^(yes|y)\b/.test(normalized)) return { decision: "yes", budgetCents };
+  if (/^(no|n)\b/.test(normalized)) return { decision: "no", budgetCents: null };
   return { decision: "unknown", budgetCents: null };
 }
 
 /** Clamps an owner-specified budget to a sane ceiling relative to the
  * business's configured/default budget, so a typo can't authorize an
  * absurd spend (Phase 3.3 guardrailed activation). */
-function clampBudget(requestedCents: number, ceilingBaseCents: number): number {
+export function clampBudget(requestedCents: number, ceilingBaseCents: number): number {
   const maxCents = ceilingBaseCents * MAX_BUDGET_MULTIPLIER;
   return Math.min(requestedCents, maxCents);
 }
