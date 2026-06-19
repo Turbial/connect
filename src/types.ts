@@ -416,6 +416,22 @@ export interface GeneratedPost {
   altText: string | null;
 }
 
+export type NextBestFixStatus = "suggested" | "acted_on";
+
+/** Phase 7.7: tracks a single category's next-best-fix recommendation over
+ * time (suggested -> acted_on) per business/category pair, so the weekly
+ * digest and chat card can acknowledge a fixed issue instead of repeating
+ * stale advice. */
+export interface NextBestFixTracking {
+  id: string;
+  business_id: string;
+  category: string;
+  recommendation: string;
+  status: NextBestFixStatus;
+  first_suggested_at: string;
+  resolved_at: string | null;
+}
+
 export type CalendarSlotStatus = "planned" | "generated" | "approved" | "posted" | "skipped";
 
 /** Phase 7.5: a single planned content slot for a business — backend data

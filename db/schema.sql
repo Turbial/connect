@@ -683,3 +683,20 @@ create table if not exists content_calendar (
 );
 
 create index if not exists idx_content_calendar_business on content_calendar(business_id, planned_date);
+
+-- 7.7: tracks each category's next-best-fix recommendation over time
+-- (suggested -> acted_on), so the weekly digest/chat card can acknowledge a
+-- resolved issue instead of repeating stale advice. One open row per
+-- business/category at a time.
+create table if not exists next_best_fix (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  category text not null,
+  recommendation text not null,
+  status text not null default 'suggested', -- suggested | acted_on
+  first_suggested_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  unique (business_id, category)
+);
+
+create index if not exists idx_next_best_fix_business on next_best_fix(business_id);

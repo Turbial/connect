@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase.js";
+import { recordNextBestFixSuggestions } from "../lib/nextBestFix.js";
 import type { Business, DataConfidence, ScoreDriver, ServiceSignal, Vertical, VisibilityScore } from "../types.js";
 import { industryInsightFor, weightedScore, weightTableFor } from "./weights.js";
 
@@ -484,6 +485,12 @@ export async function computeVisibilityScore(businessId: string): Promise<Visibi
     categoryBreakdown[category] = result.score;
     if (result.recommendation) recommendations.push(result.recommendation);
   }
+
+  const categoryRecommendations: Record<string, string | null> = {};
+  for (const [category, result] of Object.entries(categories)) {
+    categoryRecommendations[category] = result.recommendation;
+  }
+  await recordNextBestFixSuggestions(businessId, categoryRecommendations);
 
   const vertical: Vertical = business.vertical ?? "general";
   const score = weightedScore(categoryBreakdown, weightTableFor(vertical));

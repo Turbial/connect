@@ -6,6 +6,7 @@ import { getConnectionSummary } from "../lib/platformConnection.js";
 import { getLeadEventsForBusiness } from "../lib/leadEvents.js";
 import { getOrganizationForBusiness, orgDisplayName } from "../lib/orgSettings.js";
 import { getLatestVisibilityScore } from "../visibility-score/index.js";
+import { getRecentlyResolvedFixes } from "../lib/nextBestFix.js";
 import { withRetry } from "../lib/retry.js";
 import type { Business, DistributionFailure, Organization, Post } from "../types.js";
 
@@ -157,6 +158,11 @@ export async function buildWeeklyReport(business: Business): Promise<string> {
   if (data.leadCount > 0) {
     const revenueLine = data.attributedRevenueCents > 0 ? `$${(data.attributedRevenueCents / 100).toFixed(2)} attributed revenue, ` : "";
     lines.push(`💰 ${revenueLine}${data.leadCount} lead${data.leadCount === 1 ? "" : "s"} this week`);
+  }
+
+  const resolvedFixes = await getRecentlyResolvedFixes(business.id);
+  for (const fix of resolvedFixes) {
+    lines.push(`🎉 Fixed last week: ${fix.category} (was: ${fix.recommendation})`);
   }
 
   if (score?.nextBestFix) {
