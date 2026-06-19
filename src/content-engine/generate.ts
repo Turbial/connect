@@ -4,7 +4,7 @@ const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const FAL_IMAGE_URL = "https://fal.run/fal-ai/flux/schnell";
 const FAL_VIDEO_URL = "https://fal.run/fal-ai/kling-video/v1/standard/text-to-video";
 
-const PLATFORM_BRIEF: Record<Platform, string> = {
+const PLATFORM_BRIEF: Partial<Record<Platform, string>> = {
   gbp: "a short, local Google Business Profile post (under 1500 characters, no hashtags). Highlight a seasonal offer or recent work, written like a local update, not an ad.",
   instagram: "a short, punchy Instagram caption (under 200 characters) built around a single strong visual moment, with 3-5 relevant hashtags at the end.",
   facebook: "a longer, conversational Facebook post (300-600 characters) that tells a brief story about the business or a customer, no hashtags needed.",
@@ -42,6 +42,17 @@ const PLATFORM_BRIEF: Record<Platform, string> = {
   trustpilot: "a short, gracious public response (under 300 characters) for a Trustpilot business profile, appreciative and professional, no hashtags.",
   yandex: "a short business update (under 300 characters) for a Yandex Business listing, factual and clear, no hashtags.",
 };
+
+/** Phase 12 adds 72 new platforms with no distinct copy needs identified yet,
+ * so rather than write 72 near-duplicate PLATFORM_BRIEF entries, lookups for
+ * any platform not in the explicit map above fall back to this generic
+ * brief via platformBrief() below. */
+const GENERIC_PLATFORM_BRIEF =
+  "a short, clear business update (under 300 characters) appropriate for a general business profile or listing, factual and specific, no hashtags unless the platform is clearly social-media-style.";
+
+function platformBrief(platform: Platform): string {
+  return PLATFORM_BRIEF[platform] ?? GENERIC_PLATFORM_BRIEF;
+}
 
 /** Platforms that require a video asset rather than a static image. */
 const VIDEO_PLATFORMS = new Set<Platform>(["tiktok", "youtube", "vimeo"]);
@@ -94,9 +105,28 @@ async function generateCaption(
   const toneLine = tone ? ` Write in a tone that's ${tone}, reflecting the sentiment of the feedback it's based on.` : "";
 
   const result = await callDeepSeek(
-    `Write ${PLATFORM_BRIEF[platform]} for ${business.name}, located in ${business.location ?? "the local area"}.${contextLine}${toneLine} Keep it specific and concrete, not generic marketing copy.`
+    `Write ${platformBrief(platform)} for ${business.name}, located in ${business.location ?? "the local area"}.${contextLine}${toneLine} Keep it specific and concrete, not generic marketing copy.`
   );
   return result ?? `Check out what's new at ${business.name} this week!`;
+}
+
+/** Generates a second, distinct caption variant for the same post (Phase 12's
+ * per-item richness doubling), so the owner/approval flow can A/B between two
+ * options instead of a single fixed caption. Reuses the same platform brief
+ * but asks explicitly for a different angle than a typical first draft. */
+async function generateCaptionVariantB(
+  business: Business,
+  platform: Platform,
+  context?: string,
+  reviewRating?: number | null
+): Promise<string | null> {
+  const contextLine = context ? ` Base it on this: ${context}.` : "";
+  const tone = sentimentTone(reviewRating);
+  const toneLine = tone ? ` Write in a tone that's ${tone}, reflecting the sentiment of the feedback it's based on.` : "";
+
+  return callDeepSeek(
+    `Write a second, alternative version of ${platformBrief(platform)} for ${business.name}, located in ${business.location ?? "the local area"}.${contextLine}${toneLine} Take a noticeably different angle or hook than a typical first draft would, while staying just as specific and concrete.`
+  );
 }
 
 /** Generates SEO-optimized, platform-appropriate hashtags for platforms whose
@@ -206,18 +236,24 @@ export async function generatePost(
   reviewRating?: number | null
 ): Promise<GeneratedPost> {
   let caption = await generateCaption(business, platform, context, reviewRating);
+  let captionVariantB = await generateCaptionVariantB(business, platform, context, reviewRating);
 
   if (business.preferred_language && business.preferred_language.toLowerCase() !== "en") {
     caption = await translateCaption(caption, business.preferred_language);
+    if (captionVariantB) captionVariantB = await translateCaption(captionVariantB, business.preferred_language);
   }
 
   if (HASHTAG_PLATFORMS.has(platform)) {
     const hashtags = await generateHashtags(business, caption, platform);
     if (hashtags.length > 0) caption = `${caption}\n\n${hashtags.join(" ")}`;
+    if (captionVariantB) {
+      const hashtagsB = await generateHashtags(business, captionVariantB, platform);
+      if (hashtagsB.length > 0) captionVariantB = `${captionVariantB}\n\n${hashtagsB.join(" ")}`;
+    }
   }
 
   const mediaType: MediaType = VIDEO_PLATFORMS.has(platform) ? "video" : "image";
   const mediaUrl = mediaType === "video" ? await generateVideo(business, caption) : await generateImage(business, caption);
   const altText = await generateAltText(business, caption);
-  return { caption, mediaUrl, mediaType, altText };
+  return { caption, captionVariantB, mediaUrl, mediaType, altText };
 }

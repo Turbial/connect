@@ -1,22 +1,32 @@
 # Connect — MightyMax Distribution Layer
 
-The MightyMax Visibility Engine's Distribution Layer: organic posting across 36
+The MightyMax Visibility Engine's Distribution Layer: organic posting across 108
 platforms (GBP, Facebook, Instagram, Pinterest, X, LinkedIn, Threads, Yelp, Nextdoor,
 Snapchat, TikTok, YouTube, WhatsApp, Reddit, Bluesky, Mastodon, Tumblr, WeChat,
 Telegram, Discord, Medium, VK, LINE, Vimeo, Flickr, Foursquare, Bing Places, Apple
 Business Connect, Houzz, Angi, Thumbtack, Tripadvisor, OpenTable, Quora, Trustpilot,
-Yandex Business) with SMS/email owner approval, an organic → paid boost trigger with
-real Meta/Google Ads campaign launch, and a review → content feedback loop fed by Reach.
-Built standalone — integration with MotionBlue, TurboAd, and Reach is isolated behind
-clear module boundaries below.
+Yandex Business, plus 72 more added in Phase 12 spanning regional social (Weibo,
+Xiaohongshu, Douyin, KakaoTalk...), messaging (Signal, Viber, Skype, Slack...),
+listings/marketplaces (Etsy, Amazon, Shopify, eBay...), delivery/booking (DoorDash,
+Airbnb, Booking.com...), and maps (Waze, HERE, MapQuest...)) with SMS/email owner
+approval, an organic → paid boost trigger with real Meta/Google Ads campaign launch,
+and a review → content feedback loop fed by Reach. Built standalone — integration
+with MotionBlue, TurboAd, and Reach is isolated behind clear module boundaries below.
+
+Phase 12 triples platform coverage (36 → 108), AI capabilities (6 → 18), and service
+modules (6 → 18), and doubles per-item richness (a second caption variant per content
+item, `impressions`/`shares` on post metrics, and deeper audit/signal checks). The 72
+new platforms route through a single generic stub adapter
+(`src/distribution/genericAdapter.ts`) rather than 72 bespoke integrations — see Known
+gaps below.
 
 ## Services
 
 | Module | Responsibility |
 |---|---|
-| `src/content-engine` | Generates platform-tailored post copy + images/videos (DeepSeek + fal.ai). `connectedPlatforms()` determines which platforms a business posts to; `queueWeeklyContent` and `queueReviewTriggeredContent` (Phase 4) both fan out per-platform. TikTok/YouTube route through `generateVideo()` (fal.ai kling-video text-to-video) instead of the static-image path. Phase 9 adds SEO-optimized hashtag generation (`generateHashtags`, for platforms whose brief calls for hashtags), multi-language translation (`translateCaption`, driven by `business.preferred_language`), and sentiment-aware tone adjustment for review-triggered copy (`sentimentTone`, driven by the triggering review's star rating). Phase 11 adds AI-generated image alt text for accessibility/SEO, trending-idea seeding to keep weekly content topical, and AI-drafted review-reply suggestions (`review.suggested_reply`). |
+| `src/content-engine` | Generates platform-tailored post copy + images/videos (DeepSeek + fal.ai). `connectedPlatforms()` determines which platforms a business posts to; `queueWeeklyContent` and `queueReviewTriggeredContent` (Phase 4) both fan out per-platform. TikTok/YouTube route through `generateVideo()` (fal.ai kling-video text-to-video) instead of the static-image path. Phase 9 adds SEO-optimized hashtag generation (`generateHashtags`, for platforms whose brief calls for hashtags), multi-language translation (`translateCaption`, driven by `business.preferred_language`), and sentiment-aware tone adjustment for review-triggered copy (`sentimentTone`, driven by the triggering review's star rating). Phase 11 adds AI-generated image alt text for accessibility/SEO, trending-idea seeding to keep weekly content topical, and AI-drafted review-reply suggestions (`review.suggested_reply`). Phase 12 adds a second caption variant per post (`generatePost`'s `captionVariantB`, stored as `content_item.caption_variant_b`), a generic `PLATFORM_BRIEF` fallback for the 72 new platforms with no distinct copy needs, and 12 more standalone AI capabilities in `src/content-engine/capabilities.ts` (emoji-density tuning, CTA-line generation, headline generation, A/B subject lines, local-SEO keyword suggestions, accessibility trimming, posting-time suggestions, differentiation-angle suggestions, FAQ-snippet generation, urgency-phrase generation, long-form expansion for blog-style platforms, and review-reply tone refinement). |
 | `src/approval` | Sends SMS (Twilio) or email and parses content YES/NO/EDIT replies (`index.ts`/`sms.ts`/`email.ts`) and boost BOOST YES/NO replies (`boost.ts`). |
-| `src/distribution` | Posts approved content across all 36 connected platforms. Each platform's API calls are isolated behind its own adapter (`gbp.ts`, `meta.ts`, `pinterest.ts`, `twitter.ts`, `linkedin.ts`, `threads.ts`, `yelp.ts`, `nextdoor.ts`, `snapchat.ts`, `tiktok.ts`, `youtube.ts`, `whatsapp.ts`, `reddit.ts`, `bluesky.ts`, `mastodon.ts`, `tumblr.ts`, `wechat.ts`, `telegram.ts`, `discord.ts`, `medium.ts`, `vk.ts`, `line.ts`, `vimeo.ts`, `flickr.ts`, `foursquare.ts`, `bing.ts`, `applebusiness.ts`, `houzz.ts`, `angi.ts`, `thumbtack.ts`, `tripadvisor.ts`, `opentable.ts`, `quora.ts`, `trustpilot.ts`, `yandex.ts`); `index.ts` dispatches per item per platform. |
+| `src/distribution` | Posts approved content across all 108 connected platforms. Each of the original 36 platforms' API calls is isolated behind its own adapter (`gbp.ts`, `meta.ts`, `pinterest.ts`, `twitter.ts`, `linkedin.ts`, `threads.ts`, `yelp.ts`, `nextdoor.ts`, `snapchat.ts`, `tiktok.ts`, `youtube.ts`, `whatsapp.ts`, `reddit.ts`, `bluesky.ts`, `mastodon.ts`, `tumblr.ts`, `wechat.ts`, `telegram.ts`, `discord.ts`, `medium.ts`, `vk.ts`, `line.ts`, `vimeo.ts`, `flickr.ts`, `foursquare.ts`, `bing.ts`, `applebusiness.ts`, `houzz.ts`, `angi.ts`, `thumbtack.ts`, `tripadvisor.ts`, `opentable.ts`, `quora.ts`, `trustpilot.ts`, `yandex.ts`); the 72 Phase 12 platforms route through a single generic stub adapter (`genericAdapter.ts`, `createGenericAdapter`/`genericAdapters`) instead. `index.ts` dispatches per item per platform, falling back to `genericAdapters` for any platform without an explicit adapter. |
 | `src/performance` | Polls each connected platform's insights/analytics API for posted items. |
 | `src/trigger-engine` | Evaluates posted content against a views/engagement threshold and prompts the owner to approve a paid boost (Phase 3). |
 | `src/ads` | `creative.ts` generates ad copy/images from a high-performing organic post (TurboAd exposes no callable API, so this reimplements its DeepSeek/fal.ai pattern directly). `metaAds.ts`/`googleAds.ts` launch real, paused campaigns via the Meta Marketing API and Google Ads API. |
@@ -28,9 +38,10 @@ clear module boundaries below.
 | `src/rank-tracker` | Phase 11: tracks a business's local search rank for a keyword (`trackRank`) by Text Search-ing the keyword near the business and locating its own listing in the result order via the Google Places API. |
 | `src/sentiment-tracker` | Phase 11: captures a rolling 30-day avg-rating/review-count snapshot (`captureSentimentTrend`) from stored Reach reviews. |
 | `src/duplicate-listing-check` | Phase 11: flags potential duplicate/competing Google Business Profile listings (`checkDuplicateListings`) by Text Search-ing the business's own name and name-matching against its known listing. |
+| `src/service-modules-12` | Phase 12: 12 additional lightweight service modules (business-hours consistency, social-proof-badge eligibility, structured-data readiness, page-speed signal, backlink-count snapshot, local-citation-count snapshot, social-follower-count snapshot, review-response rate, content-freshness, duplicate-review flag, image-alt-text coverage, mobile-friendliness), each writing one row into the generic `service_signal` table (`module`, `signal`, `value`, `captured_at`) instead of a dedicated table per module. |
 | `src/jobs/weeklyBatch.ts` | Cron entrypoint: generate → request approval → resolve timeouts → post approved → send report. |
 | `src/jobs/collectPerformance.ts` | Cron entrypoint: poll insights for all businesses, then evaluate boost triggers. |
-| `src/jobs/runServiceModules.ts` | Cron entrypoint: runs the SEO audit, competitor snapshot capture, listing sync, rank tracking, sentiment trend capture, and duplicate listing check for all businesses (`npm run services`). |
+| `src/jobs/runServiceModules.ts` | Cron entrypoint: runs the SEO audit, competitor snapshot capture, listing sync, rank tracking, sentiment trend capture, duplicate listing check, and the 12 Phase 12 service-signal modules for all businesses (`npm run services`). |
 | `src/index.ts` | HTTP server for Twilio's inbound SMS webhook (`/webhooks/sms`, disambiguating content vs. boost replies) and Reach's review webhook (`/webhooks/reach-review`). |
 
 ## Setup
@@ -120,3 +131,23 @@ clear module boundaries below.
   by exact/substring Places id comparison (or name fallback for rank); this is a
   best-effort heuristic and may mis-rank or mis-flag for businesses with very common
   names or unconfirmed GBP listings.
+- The 72 Phase 12 platforms (Weibo, Xiaohongshu, Douyin, KakaoTalk, Signal, Viber,
+  Slack, Substack, WordPress, Etsy, Shopify, DoorDash, Airbnb, Waze, and the rest —
+  see `src/distribution/genericAdapter.ts`) are real platforms, but no bespoke API
+  integration has been built or confirmed for any of them yet. Rather than guess at
+  72 unconfirmed endpoints, `genericAdapter.ts`'s `createGenericAdapter` returns a
+  working stub: it validates the business is connected, returns a synthetic
+  `platformPostId` without making a real network call, and reports zero insights —
+  same honest-zeros approach as `discord.ts`'s `fetchDiscordInsights`, but because no
+  API is confirmed at all rather than a confirmed API with no analytics surface.
+  Replace each with a real adapter as API access is confirmed per platform, same
+  pattern as every other "needs confirmation" gap above.
+- Several of the 12 Phase 12 service modules (`backlink-count`, `page-speed`,
+  `mobile-friendliness`) depend on external data providers (Ahrefs/Moz/Semrush,
+  Google PageSpeed Insights) that aren't wired up yet — they capture a `null`
+  placeholder value until those provider integrations are confirmed, same pattern as
+  unconfigured API keys elsewhere in this codebase.
+- `src/service-modules-12/local-citation-count` and `social-follower-count` use
+  `connectedPlatforms(business).length` as a placeholder signal, since no
+  per-platform citation-presence or follower-count read API is confirmed yet — revisit
+  once those reads are wired in per platform.

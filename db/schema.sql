@@ -288,3 +288,170 @@ create table if not exists duplicate_listing_flag (
 create index if not exists idx_rank_snapshot_business on rank_snapshot(business_id);
 create index if not exists idx_sentiment_trend_business on sentiment_trend(business_id);
 create index if not exists idx_duplicate_listing_flag_business on duplicate_listing_flag(business_id);
+
+-- ── Phase 12: triple platforms again, double AI/service depth ──────────────
+-- Triples organic platform coverage (36 → 108), AI capabilities (6 → 18),
+-- and service modules (6 → 18), then doubles per-item richness across the
+-- board: a second caption variant per content item, impressions/shares
+-- added to post metrics, and a generic service_signal table backing the
+-- 12 new lightweight service modules instead of one table each.
+
+alter table business add column if not exists weibo_id text;
+alter table business add column if not exists weibo_access_token text;
+alter table business add column if not exists xiaohongshu_id text;
+alter table business add column if not exists xiaohongshu_access_token text;
+alter table business add column if not exists kakaotalk_id text;
+alter table business add column if not exists kakaotalk_access_token text;
+alter table business add column if not exists naver_id text;
+alter table business add column if not exists naver_access_token text;
+alter table business add column if not exists baidu_id text;
+alter table business add column if not exists baidu_access_token text;
+alter table business add column if not exists douyin_id text;
+alter table business add column if not exists douyin_access_token text;
+alter table business add column if not exists kuaishou_id text;
+alter table business add column if not exists kuaishou_access_token text;
+alter table business add column if not exists weverse_id text;
+alter table business add column if not exists weverse_access_token text;
+alter table business add column if not exists signal_id text;
+alter table business add column if not exists signal_access_token text;
+alter table business add column if not exists viber_id text;
+alter table business add column if not exists viber_access_token text;
+alter table business add column if not exists kik_id text;
+alter table business add column if not exists kik_access_token text;
+alter table business add column if not exists skype_id text;
+alter table business add column if not exists skype_access_token text;
+alter table business add column if not exists slack_id text;
+alter table business add column if not exists slack_access_token text;
+alter table business add column if not exists meetup_id text;
+alter table business add column if not exists meetup_access_token text;
+alter table business add column if not exists eventbrite_id text;
+alter table business add column if not exists eventbrite_access_token text;
+alter table business add column if not exists craigslist_id text;
+alter table business add column if not exists craigslist_access_token text;
+alter table business add column if not exists indeed_id text;
+alter table business add column if not exists indeed_access_token text;
+alter table business add column if not exists glassdoor_id text;
+alter table business add column if not exists glassdoor_access_token text;
+alter table business add column if not exists capterra_id text;
+alter table business add column if not exists capterra_access_token text;
+alter table business add column if not exists g2_id text;
+alter table business add column if not exists g2_access_token text;
+alter table business add column if not exists producthunt_id text;
+alter table business add column if not exists producthunt_access_token text;
+alter table business add column if not exists behance_id text;
+alter table business add column if not exists behance_access_token text;
+alter table business add column if not exists dribbble_id text;
+alter table business add column if not exists dribbble_access_token text;
+alter table business add column if not exists deviantart_id text;
+alter table business add column if not exists deviantart_access_token text;
+alter table business add column if not exists fivehundredpx_id text;
+alter table business add column if not exists fivehundredpx_access_token text;
+alter table business add column if not exists unsplash_id text;
+alter table business add column if not exists unsplash_access_token text;
+alter table business add column if not exists soundcloud_id text;
+alter table business add column if not exists soundcloud_access_token text;
+alter table business add column if not exists spotify_id text;
+alter table business add column if not exists spotify_access_token text;
+alter table business add column if not exists applepodcasts_id text;
+alter table business add column if not exists applepodcasts_access_token text;
+alter table business add column if not exists googlepodcasts_id text;
+alter table business add column if not exists googlepodcasts_access_token text;
+alter table business add column if not exists anchor_id text;
+alter table business add column if not exists anchor_access_token text;
+alter table business add column if not exists substack_id text;
+alter table business add column if not exists substack_access_token text;
+alter table business add column if not exists ghost_id text;
+alter table business add column if not exists ghost_access_token text;
+alter table business add column if not exists wordpress_id text;
+alter table business add column if not exists wordpress_access_token text;
+alter table business add column if not exists blogger_id text;
+alter table business add column if not exists blogger_access_token text;
+alter table business add column if not exists weebly_id text;
+alter table business add column if not exists weebly_access_token text;
+alter table business add column if not exists wix_id text;
+alter table business add column if not exists wix_access_token text;
+alter table business add column if not exists squarespace_id text;
+alter table business add column if not exists squarespace_access_token text;
+alter table business add column if not exists etsy_id text;
+alter table business add column if not exists etsy_access_token text;
+alter table business add column if not exists amazon_id text;
+alter table business add column if not exists amazon_access_token text;
+alter table business add column if not exists shopify_id text;
+alter table business add column if not exists shopify_access_token text;
+alter table business add column if not exists walmart_id text;
+alter table business add column if not exists walmart_access_token text;
+alter table business add column if not exists target_id text;
+alter table business add column if not exists target_access_token text;
+alter table business add column if not exists instacart_id text;
+alter table business add column if not exists instacart_access_token text;
+alter table business add column if not exists doordash_id text;
+alter table business add column if not exists doordash_access_token text;
+alter table business add column if not exists ubereats_id text;
+alter table business add column if not exists ubereats_access_token text;
+alter table business add column if not exists grubhub_id text;
+alter table business add column if not exists grubhub_access_token text;
+alter table business add column if not exists postmates_id text;
+alter table business add column if not exists postmates_access_token text;
+alter table business add column if not exists zomato_id text;
+alter table business add column if not exists zomato_access_token text;
+alter table business add column if not exists swiggy_id text;
+alter table business add column if not exists swiggy_access_token text;
+alter table business add column if not exists justeat_id text;
+alter table business add column if not exists justeat_access_token text;
+alter table business add column if not exists deliveroo_id text;
+alter table business add column if not exists deliveroo_access_token text;
+alter table business add column if not exists booking_id text;
+alter table business add column if not exists booking_access_token text;
+alter table business add column if not exists expedia_id text;
+alter table business add column if not exists expedia_access_token text;
+alter table business add column if not exists airbnb_id text;
+alter table business add column if not exists airbnb_access_token text;
+alter table business add column if not exists vrbo_id text;
+alter table business add column if not exists vrbo_access_token text;
+alter table business add column if not exists hotelscom_id text;
+alter table business add column if not exists hotelscom_access_token text;
+alter table business add column if not exists kayak_id text;
+alter table business add column if not exists kayak_access_token text;
+alter table business add column if not exists agoda_id text;
+alter table business add column if not exists agoda_access_token text;
+alter table business add column if not exists trivago_id text;
+alter table business add column if not exists trivago_access_token text;
+alter table business add column if not exists hostelworld_id text;
+alter table business add column if not exists hostelworld_access_token text;
+alter table business add column if not exists couchsurfing_id text;
+alter table business add column if not exists couchsurfing_access_token text;
+alter table business add column if not exists meituan_id text;
+alter table business add column if not exists meituan_access_token text;
+alter table business add column if not exists dianping_id text;
+alter table business add column if not exists dianping_access_token text;
+alter table business add column if not exists gaode_id text;
+alter table business add column if not exists gaode_access_token text;
+alter table business add column if not exists here_id text;
+alter table business add column if not exists here_access_token text;
+alter table business add column if not exists mapquest_id text;
+alter table business add column if not exists mapquest_access_token text;
+alter table business add column if not exists waze_id text;
+alter table business add column if not exists waze_access_token text;
+alter table business add column if not exists alibaba_id text;
+alter table business add column if not exists alibaba_access_token text;
+alter table business add column if not exists tmall_id text;
+alter table business add column if not exists tmall_access_token text;
+alter table business add column if not exists ebay_id text;
+alter table business add column if not exists ebay_access_token text;
+alter table business add column if not exists naverblog_id text;
+alter table business add column if not exists naverblog_access_token text;
+alter table content_item add column if not exists caption_variant_b text;
+alter table post add column if not exists impressions integer not null default 0;
+alter table post add column if not exists shares integer not null default 0;
+
+create table if not exists service_signal (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  module text not null,
+  signal text not null,
+  value text,
+  captured_at timestamptz not null default now()
+);
+
+create index if not exists idx_service_signal_business on service_signal(business_id);
+create index if not exists idx_service_signal_module on service_signal(module);

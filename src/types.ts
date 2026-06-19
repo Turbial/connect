@@ -1,4 +1,4 @@
-export type Platform = "gbp" | "facebook" | "instagram" | "pinterest" | "twitter" | "linkedin" | "threads" | "yelp" | "nextdoor" | "snapchat" | "tiktok" | "youtube" | "whatsapp" | "reddit" | "bluesky" | "mastodon" | "tumblr" | "wechat" | "telegram" | "discord" | "medium" | "vk" | "line" | "vimeo" | "flickr" | "foursquare" | "bing" | "applebusiness" | "houzz" | "angi" | "thumbtack" | "tripadvisor" | "opentable" | "quora" | "trustpilot" | "yandex";
+export type Platform = "gbp" | "facebook" | "instagram" | "pinterest" | "twitter" | "linkedin" | "threads" | "yelp" | "nextdoor" | "snapchat" | "tiktok" | "youtube" | "whatsapp" | "reddit" | "bluesky" | "mastodon" | "tumblr" | "wechat" | "telegram" | "discord" | "medium" | "vk" | "line" | "vimeo" | "flickr" | "foursquare" | "bing" | "applebusiness" | "houzz" | "angi" | "thumbtack" | "tripadvisor" | "opentable" | "quora" | "trustpilot" | "yandex" | "weibo" | "xiaohongshu" | "kakaotalk" | "naver" | "baidu" | "douyin" | "kuaishou" | "weverse" | "signal" | "viber" | "kik" | "skype" | "slack" | "meetup" | "eventbrite" | "craigslist" | "indeed" | "glassdoor" | "capterra" | "g2" | "producthunt" | "behance" | "dribbble" | "deviantart" | "fivehundredpx" | "unsplash" | "soundcloud" | "spotify" | "applepodcasts" | "googlepodcasts" | "anchor" | "substack" | "ghost" | "wordpress" | "blogger" | "weebly" | "wix" | "squarespace" | "etsy" | "amazon" | "shopify" | "walmart" | "target" | "instacart" | "doordash" | "ubereats" | "grubhub" | "postmates" | "zomato" | "swiggy" | "justeat" | "deliveroo" | "booking" | "expedia" | "airbnb" | "vrbo" | "hotelscom" | "kayak" | "agoda" | "trivago" | "hostelworld" | "couchsurfing" | "meituan" | "dianping" | "gaode" | "here" | "mapquest" | "waze" | "alibaba" | "tmall" | "ebay" | "naverblog";
 export type AdPlatform = "meta" | "google";
 export type MediaType = "image" | "video";
 
@@ -86,6 +86,150 @@ export interface Business {
   trustpilot_access_token: string | null;
   yandex_business_id: string | null;
   yandex_access_token: string | null;
+  weibo_id: string | null;
+  weibo_access_token: string | null;
+  xiaohongshu_id: string | null;
+  xiaohongshu_access_token: string | null;
+  kakaotalk_id: string | null;
+  kakaotalk_access_token: string | null;
+  naver_id: string | null;
+  naver_access_token: string | null;
+  baidu_id: string | null;
+  baidu_access_token: string | null;
+  douyin_id: string | null;
+  douyin_access_token: string | null;
+  kuaishou_id: string | null;
+  kuaishou_access_token: string | null;
+  weverse_id: string | null;
+  weverse_access_token: string | null;
+  signal_id: string | null;
+  signal_access_token: string | null;
+  viber_id: string | null;
+  viber_access_token: string | null;
+  kik_id: string | null;
+  kik_access_token: string | null;
+  skype_id: string | null;
+  skype_access_token: string | null;
+  slack_id: string | null;
+  slack_access_token: string | null;
+  meetup_id: string | null;
+  meetup_access_token: string | null;
+  eventbrite_id: string | null;
+  eventbrite_access_token: string | null;
+  craigslist_id: string | null;
+  craigslist_access_token: string | null;
+  indeed_id: string | null;
+  indeed_access_token: string | null;
+  glassdoor_id: string | null;
+  glassdoor_access_token: string | null;
+  capterra_id: string | null;
+  capterra_access_token: string | null;
+  g2_id: string | null;
+  g2_access_token: string | null;
+  producthunt_id: string | null;
+  producthunt_access_token: string | null;
+  behance_id: string | null;
+  behance_access_token: string | null;
+  dribbble_id: string | null;
+  dribbble_access_token: string | null;
+  deviantart_id: string | null;
+  deviantart_access_token: string | null;
+  fivehundredpx_id: string | null;
+  fivehundredpx_access_token: string | null;
+  unsplash_id: string | null;
+  unsplash_access_token: string | null;
+  soundcloud_id: string | null;
+  soundcloud_access_token: string | null;
+  spotify_id: string | null;
+  spotify_access_token: string | null;
+  applepodcasts_id: string | null;
+  applepodcasts_access_token: string | null;
+  googlepodcasts_id: string | null;
+  googlepodcasts_access_token: string | null;
+  anchor_id: string | null;
+  anchor_access_token: string | null;
+  substack_id: string | null;
+  substack_access_token: string | null;
+  ghost_id: string | null;
+  ghost_access_token: string | null;
+  wordpress_id: string | null;
+  wordpress_access_token: string | null;
+  blogger_id: string | null;
+  blogger_access_token: string | null;
+  weebly_id: string | null;
+  weebly_access_token: string | null;
+  wix_id: string | null;
+  wix_access_token: string | null;
+  squarespace_id: string | null;
+  squarespace_access_token: string | null;
+  etsy_id: string | null;
+  etsy_access_token: string | null;
+  amazon_id: string | null;
+  amazon_access_token: string | null;
+  shopify_id: string | null;
+  shopify_access_token: string | null;
+  walmart_id: string | null;
+  walmart_access_token: string | null;
+  target_id: string | null;
+  target_access_token: string | null;
+  instacart_id: string | null;
+  instacart_access_token: string | null;
+  doordash_id: string | null;
+  doordash_access_token: string | null;
+  ubereats_id: string | null;
+  ubereats_access_token: string | null;
+  grubhub_id: string | null;
+  grubhub_access_token: string | null;
+  postmates_id: string | null;
+  postmates_access_token: string | null;
+  zomato_id: string | null;
+  zomato_access_token: string | null;
+  swiggy_id: string | null;
+  swiggy_access_token: string | null;
+  justeat_id: string | null;
+  justeat_access_token: string | null;
+  deliveroo_id: string | null;
+  deliveroo_access_token: string | null;
+  booking_id: string | null;
+  booking_access_token: string | null;
+  expedia_id: string | null;
+  expedia_access_token: string | null;
+  airbnb_id: string | null;
+  airbnb_access_token: string | null;
+  vrbo_id: string | null;
+  vrbo_access_token: string | null;
+  hotelscom_id: string | null;
+  hotelscom_access_token: string | null;
+  kayak_id: string | null;
+  kayak_access_token: string | null;
+  agoda_id: string | null;
+  agoda_access_token: string | null;
+  trivago_id: string | null;
+  trivago_access_token: string | null;
+  hostelworld_id: string | null;
+  hostelworld_access_token: string | null;
+  couchsurfing_id: string | null;
+  couchsurfing_access_token: string | null;
+  meituan_id: string | null;
+  meituan_access_token: string | null;
+  dianping_id: string | null;
+  dianping_access_token: string | null;
+  gaode_id: string | null;
+  gaode_access_token: string | null;
+  here_id: string | null;
+  here_access_token: string | null;
+  mapquest_id: string | null;
+  mapquest_access_token: string | null;
+  waze_id: string | null;
+  waze_access_token: string | null;
+  alibaba_id: string | null;
+  alibaba_access_token: string | null;
+  tmall_id: string | null;
+  tmall_access_token: string | null;
+  ebay_id: string | null;
+  ebay_access_token: string | null;
+  naverblog_id: string | null;
+  naverblog_access_token: string | null;
 }
 
 export type ContentStatus = "queued" | "approved" | "posted" | "rejected" | "edited";
@@ -96,6 +240,7 @@ export interface ContentItem {
   business_id: string;
   source: ContentSource;
   caption: string;
+  caption_variant_b: string | null;
   media_url: string | null;
   media_type: MediaType;
   platforms: Platform[];
@@ -124,6 +269,8 @@ export interface Post {
   clicks: number;
   calls: number;
   engagement: number;
+  impressions: number;
+  shares: number;
   last_polled_at: string | null;
 }
 
@@ -152,6 +299,7 @@ export interface Review {
 
 export interface GeneratedPost {
   caption: string;
+  captionVariantB: string | null;
   mediaUrl: string | null;
   mediaType: MediaType;
   altText: string | null;
@@ -220,4 +368,15 @@ export interface DuplicateListingFlag {
   candidate_name: string;
   candidate_address: string | null;
   detected_at: string;
+}
+
+/** Generic signal row shared by Phase 12's 12 additional lightweight service
+ * modules, instead of a dedicated table per module. */
+export interface ServiceSignal {
+  id: string;
+  business_id: string;
+  module: string;
+  signal: string;
+  value: string | null;
+  captured_at: string;
 }

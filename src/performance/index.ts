@@ -34,6 +34,7 @@ import { fetchOpentableInsights } from "../distribution/opentable.js";
 import { fetchQuoraInsights } from "../distribution/quora.js";
 import { fetchTrustpilotInsights } from "../distribution/trustpilot.js";
 import { fetchYandexInsights } from "../distribution/yandex.js";
+import { genericAdapters } from "../distribution/genericAdapter.js";
 import type { Business, Post } from "../types.js";
 
 async function fetchInsight(business: Business, post: Post, platformPostId: string) {
@@ -72,6 +73,8 @@ async function fetchInsight(business: Business, post: Post, platformPostId: stri
   if (post.platform === "quora") return fetchQuoraInsights(business, platformPostId);
   if (post.platform === "trustpilot") return fetchTrustpilotInsights(business, platformPostId);
   if (post.platform === "yandex") return fetchYandexInsights(business, platformPostId);
+  const generic = genericAdapters[post.platform];
+  if (generic) return generic.fetchInsights(business, platformPostId);
   throw new Error(`Unsupported platform: ${post.platform}`);
 }
 

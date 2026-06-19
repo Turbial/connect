@@ -15,11 +15,17 @@ function auditIssues(business: Business): string[] {
   if (!business.location_lat || !business.location_lng) issues.push("Missing geocoded coordinates for address");
   if (!business.gbp_location_id) issues.push("Not connected to Google Business Profile");
   if (!business.owner_email && !business.owner_phone) issues.push("No owner contact method on file for approvals");
+  if (!business.fb_page_id) issues.push("Not connected to Facebook Page");
+  if (!business.ig_business_id) issues.push("Not connected to Instagram Business");
+  if (!business.preferred_language) issues.push("No preferred language set for translated copy");
+  if (!business.meta_ads_account_id && !business.google_ads_customer_id) issues.push("No ad account connected for boost campaigns");
+  if (!business.yelp_business_id) issues.push("Not connected to Yelp");
+  if (!business.gbp_refresh_token) issues.push("Missing GBP refresh token (re-auth required for long-lived access)");
   return issues;
 }
 
 function scoreFromIssues(issueCount: number): number {
-  return Math.max(0, 100 - issueCount * 20);
+  return Math.max(0, 100 - issueCount * 10);
 }
 
 /** Runs a citation/NAP completeness audit for a business and stores the result. */

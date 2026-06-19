@@ -34,6 +34,7 @@ import { postToOpentable } from "./opentable.js";
 import { postToQuora } from "./quora.js";
 import { postToTrustpilot } from "./trustpilot.js";
 import { postToYandex } from "./yandex.js";
+import { genericAdapters } from "./genericAdapter.js";
 import type { Business, ContentItem, Platform } from "../types.js";
 
 async function postToPlatform(business: Business, item: ContentItem, platform: Platform) {
@@ -73,6 +74,8 @@ async function postToPlatform(business: Business, item: ContentItem, platform: P
   if (platform === "quora") return postToQuora(business, item);
   if (platform === "trustpilot") return postToTrustpilot(business, item);
   if (platform === "yandex") return postToYandex(business, item);
+  const generic = genericAdapters[platform];
+  if (generic) return generic.postTo(business, item);
   throw new Error(`Unsupported platform: ${platform}`);
 }
 
@@ -94,6 +97,8 @@ export async function postApprovedContent(business: Business): Promise<void> {
         platform,
         platform_post_id: result.platformPostId,
         posted_at: new Date().toISOString(),
+        impressions: 0,
+        shares: 0,
       });
       if (postError) throw postError;
     }
