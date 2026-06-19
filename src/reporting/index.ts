@@ -5,6 +5,8 @@ import { isLivePlatform } from "../lib/platformStatus.js";
 import { getConnectionSummary } from "../lib/platformConnection.js";
 import { getLeadEventsForBusiness } from "../lib/leadEvents.js";
 import { getOrganizationForBusiness, orgDisplayName } from "../lib/orgSettings.js";
+import { getLatestVisibilityScore } from "../visibility-score/index.js";
+import { withRetry } from "../lib/retry.js";
 import type { Business, DistributionFailure, Organization, Post } from "../types.js";
 
 function formatWeekOf(date: Date): string {
@@ -23,6 +25,7 @@ interface WeeklyReportData {
   recurringFailurePlatforms: [string, number][];
   leadCount: number;
   attributedRevenueCents: number;
+  bestPost: Post | null;
 }
 
 /** Fetches the raw per-business counts a weekly report is built from,
@@ -106,6 +109,7 @@ async function fetchWeeklyReportData(business: Business, weekAgo: string): Promi
     recurringFailurePlatforms,
     leadCount: leadEvents.length,
     attributedRevenueCents,
+    bestPost: typedPosts.length > 0 ? typedPosts.reduce((best, p) => (p.views > best.views ? p : best)) : null,
   };
 }
 
@@ -113,15 +117,28 @@ export async function buildWeeklyReport(business: Business): Promise<string> {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const data = await fetchWeeklyReportData(business, weekAgo);
   const organization = await getOrganizationForBusiness(business);
+  const score = await getLatestVisibilityScore(business.id);
 
   const lines = [
     `Your ${orgDisplayName(organization)} Update — Week of ${formatWeekOf(new Date())}`,
+  ];
+
+  if (score) {
+    const trendLine = score.trend === null ? "" : score.trend >= 0 ? ` (+${score.trend} from last week)` : ` (${score.trend} from last week)`;
+    lines.push(`📊 Visibility score: ${score.score}/100${trendLine}`);
+  }
+
+  lines.push(
     `✅ ${data.publishedCount} post${data.publishedCount === 1 ? "" : "s"} published`,
     `🕓 ${data.pendingCount} post${data.pendingCount === 1 ? "" : "s"} pending`,
     `⚠️ ${data.failedCount} post${data.failedCount === 1 ? "" : "s"} failed`,
     `👀 ${data.totalViews} views, 💬 ${data.totalEngagement} engagements`,
-    `📞 ${data.totalCalls} calls came from your Google profile`,
-  ];
+    `📞 ${data.totalCalls} calls came from your Google profile`
+  );
+
+  if (data.bestPost) {
+    lines.push(`🏆 Best performing post: ${data.bestPost.platform} — ${data.bestPost.views} views, ${data.bestPost.engagement} engagements`);
+  }
 
   if (data.needsReconnection.length > 0) {
     lines.push(
@@ -142,6 +159,10 @@ export async function buildWeeklyReport(business: Business): Promise<string> {
     lines.push(`💰 ${revenueLine}${data.leadCount} lead${data.leadCount === 1 ? "" : "s"} this week`);
   }
 
+  if (score?.nextBestFix) {
+    lines.push(`👉 Next best fix: ${score.nextBestFix}`);
+  }
+
   return lines.join("\n");
 }
 
@@ -149,10 +170,10 @@ export async function sendWeeklyReport(business: Business): Promise<void> {
   const report = await buildWeeklyReport(business);
 
   if (business.owner_phone) {
-    await sendApprovalSms(business.owner_phone, report);
+    await withRetry(() => sendApprovalSms(business.owner_phone!, report));
   } else if (business.owner_email) {
     const organization = await getOrganizationForBusiness(business);
-    await sendApprovalEmail(business.owner_email, `Your ${orgDisplayName(organization)} Weekly Update`, report);
+    await withRetry(() => sendApprovalEmail(business.owner_email!, `Your ${orgDisplayName(organization)} Weekly Update`, report));
   }
 }
 
