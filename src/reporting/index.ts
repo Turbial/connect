@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase.js";
 import { sendApprovalEmail } from "../approval/email.js";
 import { sendApprovalSms } from "../approval/sms.js";
+import { isLivePlatform } from "../lib/platformStatus.js";
 import type { Business, Post } from "../types.js";
 
 function formatWeekOf(date: Date): string {
@@ -26,7 +27,10 @@ export async function buildWeeklyReport(business: Business): Promise<string> {
     .in("content_item_id", itemIds.length > 0 ? itemIds : ["00000000-0000-0000-0000-000000000000"]);
   if (postsError) throw postsError;
 
-  const typedPosts = (posts ?? []) as Post[];
+  // Distribution already skips dispatch to stub/unsupported platforms, so no
+  // "post" row should exist for one — but filter defensively so a digest
+  // never reports activity for a platform that doesn't actually publish.
+  const typedPosts = ((posts ?? []) as Post[]).filter((p) => isLivePlatform(p.platform));
   const totalViews = typedPosts.reduce((sum, p) => sum + p.views, 0);
   const totalCalls = typedPosts.reduce((sum, p) => sum + p.calls, 0);
   const totalEngagement = typedPosts.reduce((sum, p) => sum + p.engagement, 0);

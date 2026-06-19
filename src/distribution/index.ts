@@ -35,6 +35,7 @@ import { postToQuora } from "./quora.js";
 import { postToTrustpilot } from "./trustpilot.js";
 import { postToYandex } from "./yandex.js";
 import { genericAdapters } from "./genericAdapter.js";
+import { isLivePlatform } from "../lib/platformStatus.js";
 import type { Business, ContentItem, Platform } from "../types.js";
 
 async function postToPlatform(business: Business, item: ContentItem, platform: Platform) {
@@ -90,6 +91,12 @@ export async function postApprovedContent(business: Business): Promise<void> {
 
   for (const item of (items ?? []) as ContentItem[]) {
     for (const platform of item.platforms) {
+      if (!isLivePlatform(platform)) {
+        // Stub/unsupported platforms don't post anywhere real — skip
+        // dispatch entirely rather than record a post that never happened.
+        continue;
+      }
+
       const result = await postToPlatform(business, item, platform);
 
       const { error: postError } = await supabase.from("post").insert({
