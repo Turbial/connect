@@ -1,5 +1,6 @@
 import { getOrganizationForBusiness } from "../lib/orgSettings.js";
-import type { Business, GeneratedPost, MediaType, Platform } from "../types.js";
+import { getBrandMemory } from "../lib/brandMemory.js";
+import type { Business, BrandMemory, GeneratedPost, MediaType, Platform } from "../types.js";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const FAL_IMAGE_URL = "https://fal.run/fal-ai/flux/schnell";
@@ -102,18 +103,30 @@ async function callDeepSeek(prompt: string): Promise<string | null> {
   return data.choices[0].message.content.trim();
 }
 
+/** Builds a single guidance line from non-rejected_phrase brand memory (Phase 7.3),
+ * so prior owner EDIT feedback biases new generation rather than just blocking
+ * specific words — rejected_phrase entries are handled separately via bannedWords. */
+function brandMemoryGuidanceLine(memory: BrandMemory[]): string {
+  const relevant = memory.filter((m) => m.category !== "rejected_phrase");
+  if (relevant.length === 0) return "";
+  const notes = relevant.map((m) => `${m.category.replace(/_/g, " ")}: ${m.content}`);
+  return ` Apply this brand guidance learned from past feedback: ${notes.join("; ")}.`;
+}
+
 async function generateCaption(
   business: Business,
   platform: Platform,
   context?: string,
-  reviewRating?: number | null
+  reviewRating?: number | null,
+  memory: BrandMemory[] = []
 ): Promise<string> {
   const contextLine = context ? ` Base it on this: ${context}.` : "";
   const tone = sentimentTone(reviewRating);
   const toneLine = tone ? ` Write in a tone that's ${tone}, reflecting the sentiment of the feedback it's based on.` : "";
+  const memoryLine = brandMemoryGuidanceLine(memory);
 
   const result = await callDeepSeek(
-    `Write ${platformBrief(platform)} for ${business.name}, located in ${business.location ?? "the local area"}.${contextLine}${toneLine} Keep it specific and concrete, not generic marketing copy.`
+    `Write ${platformBrief(platform)} for ${business.name}, located in ${business.location ?? "the local area"}.${contextLine}${toneLine}${memoryLine} Keep it specific and concrete, not generic marketing copy.`
   );
   return result ?? `Check out what's new at ${business.name} this week!`;
 }
@@ -126,14 +139,16 @@ async function generateCaptionVariantB(
   business: Business,
   platform: Platform,
   context?: string,
-  reviewRating?: number | null
+  reviewRating?: number | null,
+  memory: BrandMemory[] = []
 ): Promise<string | null> {
   const contextLine = context ? ` Base it on this: ${context}.` : "";
   const tone = sentimentTone(reviewRating);
   const toneLine = tone ? ` Write in a tone that's ${tone}, reflecting the sentiment of the feedback it's based on.` : "";
+  const memoryLine = brandMemoryGuidanceLine(memory);
 
   return callDeepSeek(
-    `Write a second, alternative version of ${platformBrief(platform)} for ${business.name}, located in ${business.location ?? "the local area"}.${contextLine}${toneLine} Take a noticeably different angle or hook than a typical first draft would, while staying just as specific and concrete.`
+    `Write a second, alternative version of ${platformBrief(platform)} for ${business.name}, located in ${business.location ?? "the local area"}.${contextLine}${toneLine}${memoryLine} Take a noticeably different angle or hook than a typical first draft would, while staying just as specific and concrete.`
   );
 }
 
@@ -258,14 +273,23 @@ export async function generatePost(
   context?: string,
   reviewRating?: number | null
 ): Promise<GeneratedPost> {
-  let caption = await generateCaption(business, platform, context, reviewRating);
-  let captionVariantB = await generateCaptionVariantB(business, platform, context, reviewRating);
+  const memory = await getBrandMemory(business.id);
+  let caption = await generateCaption(business, platform, context, reviewRating, memory);
+  let captionVariantB = await generateCaptionVariantB(business, platform, context, reviewRating, memory);
 
   // Phase 4.1: union business-level banned words with the business's org-level
   // defaults (if any) — banned words are a safety guardrail, so an org default
   // should add to a business's own list rather than be overridden by it.
+  // Phase 7.3: also fold in rejected_phrase brand memory, so a phrase the owner
+  // explicitly rejected in a past EDIT reply is stripped from future generations
+  // the same way an org-level banned word is.
   const organization = await getOrganizationForBusiness(business);
-  const bannedWords = [...(business.brand_voice_banned_words ?? []), ...(organization?.brand_voice_banned_words ?? [])];
+  const rejectedPhrases = memory.filter((m) => m.category === "rejected_phrase").map((m) => m.content);
+  const bannedWords = [
+    ...(business.brand_voice_banned_words ?? []),
+    ...(organization?.brand_voice_banned_words ?? []),
+    ...rejectedPhrases,
+  ];
 
   caption = stripBannedWords(caption, bannedWords);
   if (captionVariantB) captionVariantB = stripBannedWords(captionVariantB, bannedWords);

@@ -6,6 +6,7 @@ import { postApprovedContent } from "../distribution/index.js";
 import { sendWeeklyReport } from "../reporting/index.js";
 import { isOwnerVerified } from "../lib/ownerVerification.js";
 import { hasFeature } from "../lib/packages.js";
+import { classifyEditReply, recordBrandMemory } from "../lib/brandMemory.js";
 import type { Business, ContentItem } from "../types.js";
 
 const TIMEOUT_HOURS = Number(process.env.APPROVAL_TIMEOUT_HOURS ?? 48);
@@ -61,6 +62,14 @@ async function main(): Promise<void> {
 
     const businessById = new Map((businesses ?? []).map((b) => [b.id, b as Business]));
     for (const item of editQueue) {
+      // Phase 7.3: classify why the owner asked for the change before
+      // drafting the rewrite, so a category like "rejected_phrase" persists
+      // as creative memory even if the rewrite itself is never approved.
+      if (item.requestedChange) {
+        const classified = await classifyEditReply(item.requestedChange);
+        if (classified) await recordBrandMemory(item.businessId, classified);
+      }
+
       const rewrite = await draftEditRewrite(item);
       const business = businessById.get(item.businessId);
       if (rewrite && business) {

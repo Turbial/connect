@@ -569,3 +569,23 @@ export interface CustomerMessage {
   body: string | null;
   created_at: string;
 }
+
+/** Phase 7.3: the fixed, bounded set of edit-reply categories tracked as
+ * creative memory — not open-ended free-text storage. */
+export type BrandMemoryCategory =
+  | "rejected_phrase"
+  | "preferred_cta"
+  | "tone_correction"
+  | "image_style_preference"
+  | "platform_preference"
+  | "forbidden_claim"
+  | "service_emphasis"
+  | "offer_to_avoid";
+
+export interface BrandMemory {
+  id: string;
+  business_id: string;
+  category: BrandMemoryCategory;
+  content: string;
+  created_at: string;
+}
