@@ -1,7 +1,18 @@
 import { supabase } from "../lib/supabase.js";
 import { fetchGbpInsights } from "../distribution/gbp.js";
 import { fetchMetaInsights } from "../distribution/meta.js";
+import { fetchPinterestInsights } from "../distribution/pinterest.js";
+import { fetchTwitterInsights } from "../distribution/twitter.js";
+import { fetchLinkedinInsights } from "../distribution/linkedin.js";
 import type { Business, Post } from "../types.js";
+
+async function fetchInsight(business: Business, post: Post, platformPostId: string) {
+  if (post.platform === "gbp") return fetchGbpInsights(business, platformPostId);
+  if (post.platform === "facebook" || post.platform === "instagram") return fetchMetaInsights(business, platformPostId);
+  if (post.platform === "pinterest") return fetchPinterestInsights(business, platformPostId);
+  if (post.platform === "twitter") return fetchTwitterInsights(business, platformPostId);
+  return fetchLinkedinInsights(business, platformPostId);
+}
 
 /** Polls per-platform insights for a business's posted items and updates stored metrics. */
 export async function collectPerformance(business: Business): Promise<void> {
@@ -21,28 +32,16 @@ export async function collectPerformance(business: Business): Promise<void> {
   for (const post of (posts ?? []) as Post[]) {
     if (!post.platform_post_id) continue;
 
-    if (post.platform === "gbp") {
-      const insight = await fetchGbpInsights(business, post.platform_post_id);
-      await supabase
-        .from("post")
-        .update({
-          views: insight.views,
-          clicks: insight.clicks,
-          calls: insight.calls,
-          last_polled_at: new Date().toISOString(),
-        })
-        .eq("id", post.id);
-    } else {
-      const insight = await fetchMetaInsights(business, post.platform_post_id);
-      await supabase
-        .from("post")
-        .update({
-          views: insight.views,
-          clicks: insight.clicks,
-          engagement: insight.engagement,
-          last_polled_at: new Date().toISOString(),
-        })
-        .eq("id", post.id);
-    }
+    const insight = await fetchInsight(business, post, post.platform_post_id);
+    await supabase
+      .from("post")
+      .update({
+        views: insight.views,
+        clicks: insight.clicks,
+        calls: "calls" in insight ? insight.calls : 0,
+        engagement: "engagement" in insight ? insight.engagement : 0,
+        last_polled_at: new Date().toISOString(),
+      })
+      .eq("id", post.id);
   }
 }

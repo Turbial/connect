@@ -1,10 +1,10 @@
 # Connect — MightyMax Distribution Layer
 
 The MightyMax Visibility Engine's Distribution Layer: organic posting (GBP, Facebook,
-Instagram) with SMS/email owner approval, an organic → paid boost trigger with real
-Meta/Google Ads campaign launch, and a review → content feedback loop fed by Reach.
-Built standalone — integration with MotionBlue, TurboAd, and Reach is isolated behind
-clear module boundaries below.
+Instagram, Pinterest, X, LinkedIn) with SMS/email owner approval, an organic → paid
+boost trigger with real Meta/Google Ads campaign launch, and a review → content
+feedback loop fed by Reach. Built standalone — integration with MotionBlue, TurboAd,
+and Reach is isolated behind clear module boundaries below.
 
 ## Services
 
@@ -12,8 +12,8 @@ clear module boundaries below.
 |---|---|
 | `src/content-engine` | Generates platform-tailored post copy + images (DeepSeek + fal.ai). `connectedPlatforms()` determines which platforms a business posts to; `queueWeeklyContent` and `queueReviewTriggeredContent` (Phase 4) both fan out per-platform. |
 | `src/approval` | Sends SMS (Twilio) or email and parses content YES/NO/EDIT replies (`index.ts`/`sms.ts`/`email.ts`) and boost BOOST YES/NO replies (`boost.ts`). |
-| `src/distribution` | Posts approved content to GBP, Facebook Pages, and Instagram. `gbp.ts` and `meta.ts` isolate the actual API calls behind adapters; `index.ts` dispatches per item per platform. |
-| `src/performance` | Polls GBP Insights and Meta post insights for posted items. |
+| `src/distribution` | Posts approved content to GBP, Facebook Pages, Instagram, Pinterest, X, and LinkedIn. Each platform's API calls are isolated behind its own adapter (`gbp.ts`, `meta.ts`, `pinterest.ts`, `twitter.ts`, `linkedin.ts`); `index.ts` dispatches per item per platform. |
+| `src/performance` | Polls each connected platform's insights/analytics API for posted items. |
 | `src/trigger-engine` | Evaluates posted content against a views/engagement threshold and prompts the owner to approve a paid boost (Phase 3). |
 | `src/ads` | `creative.ts` generates ad copy/images from a high-performing organic post (TurboAd exposes no callable API, so this reimplements its DeepSeek/fal.ai pattern directly). `metaAds.ts`/`googleAds.ts` launch real, paused campaigns via the Meta Marketing API and Google Ads API. |
 | `src/reach-integration` | Handles inbound Reach review events: stores the review and, for positive reviews with text, queues review-triggered content (Phase 4). |
@@ -24,7 +24,7 @@ clear module boundaries below.
 
 ## Setup
 1. Copy `.env.example` to `.env` and fill in Supabase, Twilio, DeepSeek, fal.ai, Meta,
-   Google Ads, and Reach email webhook credentials.
+   Google Ads, Pinterest/X/LinkedIn, and Reach email webhook credentials.
 2. Run `db/schema.sql` against your Supabase project.
 3. `npm install`
 4. `npm run weekly` to run the weekly batch job manually, or wire it to a scheduler.
@@ -44,5 +44,11 @@ clear module boundaries below.
   constants; no per-business configuration yet.
 - `business` rows (platform tokens, ad account ids, owner contact info) are assumed to
   be seeded manually; no onboarding UI exists.
-- Pinterest, X, TikTok, LinkedIn, and YouTube are not covered — each would need its own
-  adapter in `src/distribution` plus a `PLATFORM_BRIEF` entry in `content-engine/generate.ts`.
+- TikTok and YouTube are still not covered — both are video-first platforms and the
+  Content Engine only generates static images today. Adding them needs a video
+  generation/sourcing step before an adapter would be useful.
+- X media upload uses the legacy v1.1 endpoint since v2 has no direct image upload;
+  revisit if X deprecates it.
+- LinkedIn's `postToLinkedin` reads the created post's URN from the `x-restli-id`
+  response header per the documented UGC Posts API behavior — confirm against a live
+  org page once LinkedIn API access is granted.

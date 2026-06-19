@@ -7,6 +7,9 @@ const PLATFORM_BRIEF: Record<Platform, string> = {
   gbp: "a short, local Google Business Profile post (under 1500 characters, no hashtags). Highlight a seasonal offer or recent work, written like a local update, not an ad.",
   instagram: "a short, punchy Instagram caption (under 200 characters) built around a single strong visual moment, with 3-5 relevant hashtags at the end.",
   facebook: "a longer, conversational Facebook post (300-600 characters) that tells a brief story about the business or a customer, no hashtags needed.",
+  pinterest: "a short, keyword-rich Pinterest pin description (under 500 characters) that reads like a helpful idea or inspiration, with 2-3 relevant hashtags.",
+  twitter: "a short, punchy post for X (under 280 characters), conversational and direct, 1-2 hashtags at most.",
+  linkedin: "a professional but approachable LinkedIn post (200-400 characters) framed around expertise, craftsmanship, or community impact, no hashtags needed.",
 };
 
 async function generateCaption(business: Business, platform: Platform, context?: string): Promise<string> {

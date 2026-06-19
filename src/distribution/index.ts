@@ -1,12 +1,18 @@
 import { supabase } from "../lib/supabase.js";
 import { postToGbp } from "./gbp.js";
 import { postToFacebookPage, postToInstagram } from "./meta.js";
+import { postToPinterest } from "./pinterest.js";
+import { postToTwitter } from "./twitter.js";
+import { postToLinkedin } from "./linkedin.js";
 import type { Business, ContentItem, Platform } from "../types.js";
 
 async function postToPlatform(business: Business, item: ContentItem, platform: Platform) {
   if (platform === "gbp") return postToGbp(business, item);
   if (platform === "facebook") return postToFacebookPage(business, item);
-  return postToInstagram(business, item);
+  if (platform === "instagram") return postToInstagram(business, item);
+  if (platform === "pinterest") return postToPinterest(business, item);
+  if (platform === "twitter") return postToTwitter(business, item);
+  return postToLinkedin(business, item);
 }
 
 /** Posts every approved content item for a business to its target platforms. */

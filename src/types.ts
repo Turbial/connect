@@ -1,4 +1,4 @@
-export type Platform = "gbp" | "facebook" | "instagram";
+export type Platform = "gbp" | "facebook" | "instagram" | "pinterest" | "twitter" | "linkedin";
 export type AdPlatform = "meta" | "google";
 
 export interface Business {
@@ -19,6 +19,11 @@ export interface Business {
   meta_ads_account_id: string | null;
   google_ads_customer_id: string | null;
   google_ads_refresh_token: string | null;
+  pinterest_board_id: string | null;
+  pinterest_access_token: string | null;
+  twitter_access_token: string | null;
+  linkedin_organization_id: string | null;
+  linkedin_access_token: string | null;
 }
 
 export type ContentStatus = "queued" | "approved" | "posted" | "rejected" | "edited";

@@ -109,3 +109,13 @@ begin
 end $$;
 
 create index if not exists idx_review_business on review(business_id);
+
+-- ── Phase 5: Pinterest, X, LinkedIn connections ─────────────────────────────
+-- TikTok and YouTube are intentionally excluded: both require video assets,
+-- and the Content Engine currently only generates static images.
+
+alter table business add column if not exists pinterest_board_id text;
+alter table business add column if not exists pinterest_access_token text;
+alter table business add column if not exists twitter_access_token text;
+alter table business add column if not exists linkedin_organization_id text;
+alter table business add column if not exists linkedin_access_token text;

@@ -6,6 +6,9 @@ export function connectedPlatforms(business: Business): Platform[] {
   const platforms: Platform[] = ["gbp"]; // GBP is always assumed connected in Phase 1+
   if (business.fb_page_id) platforms.push("facebook");
   if (business.ig_business_id) platforms.push("instagram");
+  if (business.pinterest_board_id) platforms.push("pinterest");
+  if (business.twitter_access_token) platforms.push("twitter");
+  if (business.linkedin_organization_id) platforms.push("linkedin");
   return platforms;
 }
 
