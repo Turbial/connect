@@ -2,6 +2,10 @@ export type Platform = "gbp" | "facebook" | "instagram" | "pinterest" | "twitter
 export type AdPlatform = "meta" | "google";
 export type MediaType = "image" | "video";
 
+/** "video" is the generic default surface for video platforms with no further
+ * surface distinction (Phase 7.4) — the rest distinguish a real surface choice. */
+export type Surface = "feed" | "story" | "reel" | "short" | "carousel" | "video";
+
 export interface Business {
   id: string;
   name: string;
@@ -407,6 +411,7 @@ export interface GeneratedPost {
   captionVariantB: string | null;
   mediaUrl: string | null;
   mediaType: MediaType;
+  surface: Surface;
   altText: string | null;
 }
 

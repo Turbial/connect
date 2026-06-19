@@ -1,6 +1,6 @@
 import { getOrganizationForBusiness } from "../lib/orgSettings.js";
 import { getBrandMemory } from "../lib/brandMemory.js";
-import type { Business, BrandMemory, GeneratedPost, MediaType, Platform } from "../types.js";
+import type { Business, BrandMemory, GeneratedPost, MediaType, Platform, Surface } from "../types.js";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
 const FAL_IMAGE_URL = "https://fal.run/fal-ai/flux/schnell";
@@ -58,6 +58,28 @@ function platformBrief(platform: Platform): string {
 
 /** Platforms that require a video asset rather than a static image. */
 const VIDEO_PLATFORMS = new Set<Platform>(["tiktok", "youtube", "vimeo", "instagram", "facebook"]);
+
+/** Phase 7.4: the surfaces a platform actually distinguishes, in default-first
+ * order. Platforms not listed here have no real surface distinction beyond
+ * their MediaType, so they fall back to "feed" (image) or "video" (video) in
+ * surfaceFor() below — this is additive and changes no existing behavior. */
+const PLATFORM_SURFACES: Partial<Record<Platform, Surface[]>> = {
+  instagram: ["feed", "story", "reel", "carousel"],
+  facebook: ["feed", "story", "video"],
+  youtube: ["video", "short"],
+};
+
+/** Resolves the surface for a post: an explicitly requested surface if the
+ * platform actually distinguishes it, otherwise the platform's default, and
+ * otherwise the plain image/video fallback every other platform already had. */
+export function surfaceFor(platform: Platform, mediaType: MediaType, requested?: Surface): Surface {
+  const allowed = PLATFORM_SURFACES[platform];
+  if (allowed) {
+    if (requested && allowed.includes(requested)) return requested;
+    return allowed[0];
+  }
+  return mediaType === "video" ? "video" : "feed";
+}
 
 /** Platforms whose brief calls for hashtags, where SEO-optimized hashtag generation adds value. */
 const HASHTAG_PLATFORMS = new Set<Platform>(["instagram", "pinterest", "twitter", "tiktok", "mastodon", "tumblr", "vk", "flickr"]);
@@ -271,7 +293,8 @@ export async function generatePost(
   business: Business,
   platform: Platform = "gbp",
   context?: string,
-  reviewRating?: number | null
+  reviewRating?: number | null,
+  requestedSurface?: Surface
 ): Promise<GeneratedPost> {
   const memory = await getBrandMemory(business.id);
   let caption = await generateCaption(business, platform, context, reviewRating, memory);
@@ -311,5 +334,6 @@ export async function generatePost(
   const mediaType: MediaType = VIDEO_PLATFORMS.has(platform) ? "video" : "image";
   const mediaUrl = mediaType === "video" ? await generateVideo(business, caption) : await generateImage(business, caption);
   const altText = await generateAltText(business, caption);
-  return { caption, captionVariantB, mediaUrl, mediaType, altText };
+  const surface = surfaceFor(platform, mediaType, requestedSurface);
+  return { caption, captionVariantB, mediaUrl, mediaType, surface, altText };
 }
