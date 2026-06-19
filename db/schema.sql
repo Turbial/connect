@@ -25,6 +25,7 @@ create table if not exists content_item (
   source text not null default 'content_engine', -- content_engine | manual | review_triggered
   caption text not null,
   media_url text,
+  media_type text not null default 'image', -- image | video
   platforms text[] not null default array['gbp'],
   status text not null default 'queued', -- queued | approved | posted | rejected | edited
   review_id uuid,
@@ -133,3 +134,13 @@ alter table business add column if not exists nextdoor_business_id text;
 alter table business add column if not exists nextdoor_access_token text;
 alter table business add column if not exists snapchat_profile_id text;
 alter table business add column if not exists snapchat_access_token text;
+
+-- ── Phase 7: TikTok + YouTube (video) connections ───────────────────────────
+-- Adds the two video-first platforms, now that the Content Engine can
+-- generate short video clips via fal.ai in addition to static images.
+
+alter table content_item add column if not exists media_type text not null default 'image';
+alter table business add column if not exists tiktok_user_id text;
+alter table business add column if not exists tiktok_access_token text;
+alter table business add column if not exists youtube_channel_id text;
+alter table business add column if not exists youtube_refresh_token text;

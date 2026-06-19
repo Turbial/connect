@@ -1,5 +1,6 @@
-export type Platform = "gbp" | "facebook" | "instagram" | "pinterest" | "twitter" | "linkedin" | "threads" | "yelp" | "nextdoor" | "snapchat";
+export type Platform = "gbp" | "facebook" | "instagram" | "pinterest" | "twitter" | "linkedin" | "threads" | "yelp" | "nextdoor" | "snapchat" | "tiktok" | "youtube";
 export type AdPlatform = "meta" | "google";
+export type MediaType = "image" | "video";
 
 export interface Business {
   id: string;
@@ -32,6 +33,10 @@ export interface Business {
   nextdoor_access_token: string | null;
   snapchat_profile_id: string | null;
   snapchat_access_token: string | null;
+  tiktok_user_id: string | null;
+  tiktok_access_token: string | null;
+  youtube_channel_id: string | null;
+  youtube_refresh_token: string | null;
 }
 
 export type ContentStatus = "queued" | "approved" | "posted" | "rejected" | "edited";
@@ -43,6 +48,7 @@ export interface ContentItem {
   source: ContentSource;
   caption: string;
   media_url: string | null;
+  media_type: MediaType;
   platforms: Platform[];
   status: ContentStatus;
   review_id: string | null;
@@ -97,6 +103,7 @@ export interface Review {
 export interface GeneratedPost {
   caption: string;
   mediaUrl: string | null;
+  mediaType: MediaType;
 }
 
 export interface AdCreative {

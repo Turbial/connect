@@ -1,9 +1,10 @@
 # Connect — MightyMax Distribution Layer
 
-The MightyMax Visibility Engine's Distribution Layer: organic posting across 10
+The MightyMax Visibility Engine's Distribution Layer: organic posting across 12
 platforms (GBP, Facebook, Instagram, Pinterest, X, LinkedIn, Threads, Yelp, Nextdoor,
-Snapchat) with SMS/email owner approval, an organic → paid boost trigger with real
-Meta/Google Ads campaign launch, and a review → content feedback loop fed by Reach.
+Snapchat, TikTok, YouTube) with SMS/email owner approval, an organic → paid boost
+trigger with real Meta/Google Ads campaign launch, and a review → content feedback
+loop fed by Reach.
 Built standalone — integration with MotionBlue, TurboAd, and Reach is isolated behind
 clear module boundaries below.
 
@@ -11,9 +12,9 @@ clear module boundaries below.
 
 | Module | Responsibility |
 |---|---|
-| `src/content-engine` | Generates platform-tailored post copy + images (DeepSeek + fal.ai). `connectedPlatforms()` determines which platforms a business posts to; `queueWeeklyContent` and `queueReviewTriggeredContent` (Phase 4) both fan out per-platform. |
+| `src/content-engine` | Generates platform-tailored post copy + images/videos (DeepSeek + fal.ai). `connectedPlatforms()` determines which platforms a business posts to; `queueWeeklyContent` and `queueReviewTriggeredContent` (Phase 4) both fan out per-platform. TikTok/YouTube route through `generateVideo()` (fal.ai kling-video text-to-video) instead of the static-image path. |
 | `src/approval` | Sends SMS (Twilio) or email and parses content YES/NO/EDIT replies (`index.ts`/`sms.ts`/`email.ts`) and boost BOOST YES/NO replies (`boost.ts`). |
-| `src/distribution` | Posts approved content across all 10 connected platforms. Each platform's API calls are isolated behind its own adapter (`gbp.ts`, `meta.ts`, `pinterest.ts`, `twitter.ts`, `linkedin.ts`, `threads.ts`, `yelp.ts`, `nextdoor.ts`, `snapchat.ts`); `index.ts` dispatches per item per platform. |
+| `src/distribution` | Posts approved content across all 12 connected platforms. Each platform's API calls are isolated behind its own adapter (`gbp.ts`, `meta.ts`, `pinterest.ts`, `twitter.ts`, `linkedin.ts`, `threads.ts`, `yelp.ts`, `nextdoor.ts`, `snapchat.ts`, `tiktok.ts`, `youtube.ts`); `index.ts` dispatches per item per platform. |
 | `src/performance` | Polls each connected platform's insights/analytics API for posted items. |
 | `src/trigger-engine` | Evaluates posted content against a views/engagement threshold and prompts the owner to approve a paid boost (Phase 3). |
 | `src/ads` | `creative.ts` generates ad copy/images from a high-performing organic post (TurboAd exposes no callable API, so this reimplements its DeepSeek/fal.ai pattern directly). `metaAds.ts`/`googleAds.ts` launch real, paused campaigns via the Meta Marketing API and Google Ads API. |
@@ -46,9 +47,16 @@ clear module boundaries below.
   constants; no per-business configuration yet.
 - `business` rows (platform tokens, ad account ids, owner contact info) are assumed to
   be seeded manually; no onboarding UI exists.
-- TikTok and YouTube are still not covered — both are video-first platforms and the
-  Content Engine only generates static images today. Adding them needs a video
-  generation/sourcing step before an adapter would be useful.
+- TikTok's adapter (`tiktok.ts`) uses the Content Posting API's `PULL_FROM_URL` init
+  flow against the fal.ai-hosted video URL; this requires the app to be out of
+  TikTok's sandbox/audit review before `PUBLIC_TO_EVERYONE` posts are allowed —
+  confirm once developer access is granted.
+- YouTube's adapter (`youtube.ts`) uploads via the Data API v3 resumable upload
+  endpoint; Shorts classification is automatic based on the video's own aspect
+  ratio/duration, but daily upload quota usage should be monitored once live.
+- fal.ai's kling-video text-to-video model used for TikTok/YouTube is meaningfully
+  slower and costlier than image generation — worth revisiting if video volume
+  grows enough to matter for cost or batch-job duration.
 - X media upload uses the legacy v1.1 endpoint since v2 has no direct image upload;
   revisit if X deprecates it.
 - LinkedIn's `postToLinkedin` reads the created post's URN from the `x-restli-id`

@@ -8,6 +8,8 @@ import { fetchThreadsInsights } from "../distribution/threads.js";
 import { fetchYelpInsights } from "../distribution/yelp.js";
 import { fetchNextdoorInsights } from "../distribution/nextdoor.js";
 import { fetchSnapchatInsights } from "../distribution/snapchat.js";
+import { fetchTiktokInsights } from "../distribution/tiktok.js";
+import { fetchYoutubeInsights } from "../distribution/youtube.js";
 import type { Business, Post } from "../types.js";
 
 async function fetchInsight(business: Business, post: Post, platformPostId: string) {
@@ -19,7 +21,9 @@ async function fetchInsight(business: Business, post: Post, platformPostId: stri
   if (post.platform === "threads") return fetchThreadsInsights(business, platformPostId);
   if (post.platform === "yelp") return fetchYelpInsights(business, platformPostId);
   if (post.platform === "nextdoor") return fetchNextdoorInsights(business, platformPostId);
-  return fetchSnapchatInsights(business, platformPostId);
+  if (post.platform === "snapchat") return fetchSnapchatInsights(business, platformPostId);
+  if (post.platform === "tiktok") return fetchTiktokInsights(business, platformPostId);
+  return fetchYoutubeInsights(business, platformPostId);
 }
 
 /** Polls per-platform insights for a business's posted items and updates stored metrics. */

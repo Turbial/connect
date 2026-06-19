@@ -13,6 +13,8 @@ export function connectedPlatforms(business: Business): Platform[] {
   if (business.yelp_business_id) platforms.push("yelp");
   if (business.nextdoor_business_id) platforms.push("nextdoor");
   if (business.snapchat_profile_id) platforms.push("snapchat");
+  if (business.tiktok_user_id) platforms.push("tiktok");
+  if (business.youtube_channel_id) platforms.push("youtube");
   return platforms;
 }
 
@@ -25,13 +27,14 @@ export async function queueWeeklyContent(business: Business, count = 3): Promise
 
   for (let i = 0; i < count; i++) {
     for (const platform of platforms) {
-      const { caption, mediaUrl } = await generatePost(business, platform);
+      const { caption, mediaUrl, mediaType } = await generatePost(business, platform);
 
       const { error } = await supabase.from("content_item").insert({
         business_id: business.id,
         source: "content_engine",
         caption,
         media_url: mediaUrl,
+        media_type: mediaType,
         platforms: [platform],
         status: "queued",
       });
@@ -46,13 +49,14 @@ export async function queueReviewTriggeredContent(business: Business, reviewId: 
   const platforms = connectedPlatforms(business);
 
   for (const platform of platforms) {
-    const { caption, mediaUrl } = await generatePost(business, platform, brief);
+    const { caption, mediaUrl, mediaType } = await generatePost(business, platform, brief);
 
     const { error } = await supabase.from("content_item").insert({
       business_id: business.id,
       source: "review_triggered",
       caption,
       media_url: mediaUrl,
+      media_type: mediaType,
       platforms: [platform],
       status: "queued",
       review_id: reviewId,

@@ -8,6 +8,8 @@ import { postToThreads } from "./threads.js";
 import { postToYelp } from "./yelp.js";
 import { postToNextdoor } from "./nextdoor.js";
 import { postToSnapchat } from "./snapchat.js";
+import { postToTiktok } from "./tiktok.js";
+import { postToYoutube } from "./youtube.js";
 import type { Business, ContentItem, Platform } from "../types.js";
 
 async function postToPlatform(business: Business, item: ContentItem, platform: Platform) {
@@ -20,7 +22,9 @@ async function postToPlatform(business: Business, item: ContentItem, platform: P
   if (platform === "threads") return postToThreads(business, item);
   if (platform === "yelp") return postToYelp(business, item);
   if (platform === "nextdoor") return postToNextdoor(business, item);
-  return postToSnapchat(business, item);
+  if (platform === "snapchat") return postToSnapchat(business, item);
+  if (platform === "tiktok") return postToTiktok(business, item);
+  return postToYoutube(business, item);
 }
 
 /** Posts every approved content item for a business to its target platforms. */
