@@ -7,6 +7,7 @@ import { getLeadEventsForBusiness } from "../lib/leadEvents.js";
 import { getOrganizationForBusiness, orgDisplayName } from "../lib/orgSettings.js";
 import { getLatestVisibilityScore } from "../visibility-score/index.js";
 import { getRecentlyResolvedFixes } from "../lib/nextBestFix.js";
+import { getBoostPerformance } from "../lib/boostReport.js";
 import { withRetry } from "../lib/retry.js";
 import type { Business, DistributionFailure, Organization, Post } from "../types.js";
 
@@ -153,6 +154,18 @@ export async function buildWeeklyReport(business: Business): Promise<string> {
 
   if (data.boostedCount > 0) {
     lines.push(`🚀 ${data.boostedCount} post${data.boostedCount === 1 ? "" : "s"} turned into paid ads this week`);
+  }
+
+  // Phase 8.5: per-boost spend/attribution — leads/revenue only when a real
+  // lead_event ties back to that boost's post, never a fabricated estimate.
+  const boostPerformance = await getBoostPerformance(business.id, weekAgo);
+  for (const entry of boostPerformance) {
+    const spent = (entry.spentCents / 100).toFixed(2);
+    lines.push(`💸 Boosted ${entry.platform} post: $${spent} spent, ${entry.clicks} clicks, ${entry.engagement} engagement`);
+    if (entry.leadCount !== null) {
+      const revenueLine = entry.attributedRevenueCents ? `$${(entry.attributedRevenueCents / 100).toFixed(2)} attributed revenue, ` : "";
+      lines.push(`   ↳ ${revenueLine}${entry.leadCount} lead${entry.leadCount === 1 ? "" : "s"} from this boost`);
+    }
   }
 
   if (data.leadCount > 0) {
