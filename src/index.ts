@@ -15,6 +15,7 @@ import { sendApprovalSms } from "./approval/sms.js";
 import { sendApprovalWhatsapp, whatsappButtonToText } from "./approval/whatsapp.js";
 import { sendOwnerVerificationCode, confirmOwnerVerification } from "./lib/ownerVerification.js";
 import { classifyChatIntent, buildChatIntentReply } from "./chat/scoreCard.js";
+import { buildOperatorSnapshot } from "./lib/operatorSnapshot.js";
 import type { Business, Platform } from "./types.js";
 
 /** Phase 7.1: dispatches a decision (already-resolved text, e.g. "yes"/"no"/
@@ -235,6 +236,19 @@ async function handleVisibilityScoreRoute(req: http.IncomingMessage, res: http.S
   res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(score));
 }
 
+/** Phase 8.9: read-only operator snapshot — visibility score, connection
+ * health, pending approvals/boosts, unresolved reviews, and the recent
+ * agent_action audit trail, all assembled from data already computed by
+ * prior phases. */
+async function handleOperatorSnapshotRoute(req: http.IncomingMessage, res: http.ServerResponse, businessId: string) {
+  const snapshot = await buildOperatorSnapshot(businessId);
+  if (!snapshot) {
+    res.writeHead(404).end();
+    return;
+  }
+  res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(snapshot));
+}
+
 /** Phase 4.3: consolidated multi-location report for an agency/org. */
 async function handleOrgReportRoute(req: http.IncomingMessage, res: http.ServerResponse, organizationId: string) {
   const report = await buildOrgWeeklyReport(organizationId);
@@ -370,6 +384,11 @@ const server = http.createServer(async (req, res) => {
   const visibilityScoreMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/visibility-score$/);
   if (visibilityScoreMatch) {
     await handleVisibilityScoreRoute(req, res, visibilityScoreMatch[1]);
+    return;
+  }
+  const operatorSnapshotMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/operator-snapshot$/);
+  if (operatorSnapshotMatch) {
+    await handleOperatorSnapshotRoute(req, res, operatorSnapshotMatch[1]);
     return;
   }
   const orgReportMatch = req.method === "GET" && req.url?.match(/^\/organizations\/([^/]+)\/report$/);

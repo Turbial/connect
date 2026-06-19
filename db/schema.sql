@@ -737,3 +737,28 @@ alter table organization add column if not exists whatsapp_phone_number_id text;
 -- 8.8: optional external CRM/PM webhook a lead_intent customer message is
 -- POSTed to — Connect routes the signal, it does not store/manage the lead.
 alter table business add column if not exists crm_webhook_url text;
+
+-- 8.9 (doc §15): unified agent action queue — a parallel audit trail of
+-- every action the system takes this phase, not yet load-bearing for any
+-- existing code path (the weekly cron loop is not rewritten to depend on
+-- this table).
+create table if not exists agent_action (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  source text not null, -- weekly_job | owner_message | customer_message | review | missed_call | performance_trigger
+  intent text not null,
+  tool text not null,
+  input jsonb not null,
+  output jsonb,
+  status text not null, -- pending | completed | failed | awaiting_approval
+  risk_level text not null, -- low | medium | high
+  approval_required boolean not null default false,
+  owner_response text,
+  platform_result jsonb,
+  error text,
+  retry_count integer not null default 0,
+  audit_log jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_agent_action_business on agent_action(business_id, created_at);

@@ -4,6 +4,7 @@ import { getConnection, upsertConnection } from "../lib/platformConnection.js";
 import { statusOf } from "../lib/platformStatus.js";
 import { getOrganizationForBusiness } from "../lib/orgSettings.js";
 import { planWeek, markSlotStatus } from "../lib/contentCalendar.js";
+import { logAgentAction } from "../lib/agentAction.js";
 import type { Business, ContentItem, ContentLibraryItem, Platform } from "../types.js";
 
 /** The business-column value that identifies a connected account per platform,
@@ -432,6 +433,19 @@ export async function queueWeeklyContent(business: Business): Promise<void> {
 
     if (error) throw error;
     await markSlotStatus(slot.id, "generated", contentItem.id);
+
+    // Phase 8.9: parallel audit-trail entry — does not gate generation above.
+    await logAgentAction({
+      businessId: business.id,
+      source: "weekly_job",
+      intent: "generate_weekly_post",
+      tool: "generate_content",
+      input: { platform: slot.platform, surface: slot.surface },
+      output: { contentItemId: contentItem.id },
+      status: "completed",
+      riskLevel: "low",
+      approvalRequired: false,
+    });
   }
 }
 

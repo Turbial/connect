@@ -6,6 +6,7 @@ import { getOrganizationForBusiness, orgDisplayName, resolveBusinessSetting } fr
 import { hasFeature } from "../lib/packages.js";
 import { tryAutoBoost } from "../approval/boost.js";
 import { statusOf } from "../lib/platformStatus.js";
+import { logAgentAction } from "../lib/agentAction.js";
 import type { AdPlatform, Business, BoostTrigger, Organization, Post } from "../types.js";
 
 /** A post earns a boost prompt once it clears either threshold and has no existing boost_trigger. */
@@ -94,6 +95,20 @@ export async function evaluateBoostTriggers(business: Business): Promise<void> {
       .select()
       .single();
     if (insertError) throw insertError;
+
+    // Phase 8.9: parallel audit-trail entry — does not gate the trigger
+    // insert above or the auto-boost/manual-approval decision below.
+    await logAgentAction({
+      businessId: business.id,
+      source: "performance_trigger",
+      intent: "propose_boost",
+      tool: "propose_boost",
+      input: { postId: winner.id, adPlatform },
+      output: { boostTriggerId: insertedTrigger.id },
+      status: "pending",
+      riskLevel: "medium",
+      approvalRequired: true,
+    });
 
     // Phase 8.2: a configured policy can launch the boost immediately,
     // without an owner approval round-trip — skip sending the proposal

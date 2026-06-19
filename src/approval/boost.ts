@@ -4,6 +4,7 @@ import { launchMetaCampaign } from "../ads/metaAds.js";
 import { launchGoogleCampaign } from "../ads/googleAds.js";
 import { getOrganizationForBusiness, resolveBusinessSetting } from "../lib/orgSettings.js";
 import { canAutoBoost } from "../lib/boostPolicy.js";
+import { logAgentAction } from "../lib/agentAction.js";
 import type { Business, BoostTrigger, Post } from "../types.js";
 
 /** Default boost spend until businesses can configure their own budget. */
@@ -15,8 +16,8 @@ const DEFAULT_BUDGET_CENTS = 2000;
  * an absurd spend without a second confirmation step. */
 const MAX_BUDGET_MULTIPLIER = 5;
 
-/** True if the business has at least one boost_trigger awaiting an owner reply. */
-export async function hasPendingBoost(businessId: string): Promise<boolean> {
+/** Resolves the boost_trigger rows for a business still awaiting an owner reply. */
+export async function getPendingBoostTriggers(businessId: string): Promise<BoostTrigger[]> {
   const { data: posts, error } = await supabase
     .from("post")
     .select("id, content_item:content_item_id(business_id)")
@@ -24,16 +25,21 @@ export async function hasPendingBoost(businessId: string): Promise<boolean> {
   if (error) throw error;
 
   const postIds = (posts ?? []).filter((p) => p.content_item?.business_id === businessId).map((p) => p.id);
-  if (postIds.length === 0) return false;
+  if (postIds.length === 0) return [];
 
   const { data: pending, error: pendingError } = await supabase
     .from("boost_trigger")
-    .select("id")
+    .select("*")
     .in("post_id", postIds)
     .is("responded_at", null);
   if (pendingError) throw pendingError;
 
-  return (pending ?? []).length > 0;
+  return (pending ?? []) as BoostTrigger[];
+}
+
+/** True if the business has at least one boost_trigger awaiting an owner reply. */
+export async function hasPendingBoost(businessId: string): Promise<boolean> {
+  return (await getPendingBoostTriggers(businessId)).length > 0;
 }
 
 interface BoostReply {
@@ -105,6 +111,21 @@ export async function launchBoost(business: Business, trigger: BoostTrigger, cap
     .from("boost_trigger")
     .update({ ad_campaign_id: result.campaignId, budget_cents: budgetCents })
     .eq("id", trigger.id);
+
+  // Phase 8.9: parallel audit-trail entry — the launch above already
+  // happened by this point regardless of whether this write succeeds.
+  await logAgentAction({
+    businessId: business.id,
+    source: trigger.owner_response === "auto" ? "performance_trigger" : "owner_message",
+    intent: "launch_boost",
+    tool: "launch_boost",
+    input: { boostTriggerId: trigger.id, adPlatform: trigger.ad_platform, budgetCents },
+    output: { campaignId: result.campaignId },
+    status: "completed",
+    riskLevel: "high",
+    approvalRequired: trigger.owner_response !== "auto",
+    ownerResponse: trigger.owner_response,
+  });
 }
 
 /** Phase 8.2: attempts to launch a boost immediately, without an owner
@@ -129,7 +150,7 @@ export async function tryAutoBoost(business: Business, trigger: BoostTrigger, po
     .update({ owner_response: "auto", responded_at: new Date().toISOString(), handed_off_to_marketing: true })
     .eq("id", trigger.id);
 
-  await launchBoost(business, trigger, caption, budgetCents);
+  await launchBoost(business, { ...trigger, owner_response: "auto" }, caption, budgetCents);
   return true;
 }
 

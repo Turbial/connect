@@ -641,6 +641,33 @@ export interface CustomerMessage {
   created_at: string;
 }
 
+/** Phase 8.9 (doc §15): the unified agent action queue — every action the
+ * system takes becomes a record, logged as a parallel audit trail this
+ * phase (the existing weekly-batch/trigger code paths are not rewritten to
+ * depend on this table yet). */
+export type AgentActionSource = "weekly_job" | "owner_message" | "customer_message" | "review" | "missed_call" | "performance_trigger";
+export type AgentActionStatus = "pending" | "completed" | "failed" | "awaiting_approval";
+export type AgentActionRiskLevel = "low" | "medium" | "high";
+
+export interface AgentAction {
+  id: string;
+  business_id: string;
+  source: AgentActionSource;
+  intent: string;
+  tool: string;
+  input: unknown;
+  output: unknown | null;
+  status: AgentActionStatus;
+  risk_level: AgentActionRiskLevel;
+  approval_required: boolean;
+  owner_response: string | null;
+  platform_result: unknown | null;
+  error: string | null;
+  retry_count: number;
+  audit_log: string[];
+  created_at: string;
+}
+
 /** Phase 7.3: the fixed, bounded set of edit-reply categories tracked as
  * creative memory — not open-ended free-text storage. */
 export type BrandMemoryCategory =

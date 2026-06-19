@@ -37,6 +37,7 @@ import { postToYandex } from "./yandex.js";
 import { genericAdapters } from "./genericAdapter.js";
 import { isLivePlatform } from "../lib/platformStatus.js";
 import { withRetry } from "../lib/retry.js";
+import { logAgentAction } from "../lib/agentAction.js";
 import type { Business, ContentItem, Platform, Post } from "../types.js";
 
 async function postToPlatform(business: Business, item: ContentItem, platform: Platform) {
@@ -109,12 +110,39 @@ async function recordPost(
         { onConflict: "content_item_id,platform,variant", ignoreDuplicates: true }
       );
     if (postError) throw postError;
+
+    // Phase 8.9: parallel audit-trail entry only — this doesn't gate or
+    // change the dispatch above, which already happened by this point.
+    await logAgentAction({
+      businessId: business.id,
+      source: "weekly_job",
+      intent: "publish_post",
+      tool: "post_to_platform",
+      input: { contentItemId: item.id, platform, variant },
+      output: { platformPostId: result.platformPostId },
+      status: "completed",
+      riskLevel: "low",
+      approvalRequired: false,
+    });
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     await supabase.from("distribution_failure").insert({
       business_id: business.id,
       content_item_id: item.id,
       platform,
-      error: err instanceof Error ? err.message : String(err),
+      error: message,
+    });
+
+    await logAgentAction({
+      businessId: business.id,
+      source: "weekly_job",
+      intent: "publish_post",
+      tool: "post_to_platform",
+      input: { contentItemId: item.id, platform, variant },
+      status: "failed",
+      riskLevel: "low",
+      approvalRequired: false,
+      error: message,
     });
   }
 }
