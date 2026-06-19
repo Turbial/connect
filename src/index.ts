@@ -7,7 +7,11 @@ import { handleReachReview } from "./reach-integration/index.js";
 import { getConnectionSummary } from "./lib/platformConnection.js";
 import { getLatestVisibilityScore } from "./visibility-score/index.js";
 import { buildOrgWeeklyReport } from "./reporting/index.js";
-import type { Business } from "./types.js";
+import { statusOfPartnerAccess, PARTNER_ACCESS_RISK } from "./lib/partnerAccessRisk.js";
+import { handleMissedCall } from "./lib/missedCallTextback.js";
+import { recordCustomerMessage, getLatestInboundChannel } from "./lib/customerMessaging.js";
+import { sendApprovalSms } from "./approval/sms.js";
+import type { Business, Platform } from "./types.js";
 
 async function handleSmsWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
   let body = "";
@@ -128,6 +132,84 @@ async function handleOrgReportRoute(req: http.IncomingMessage, res: http.ServerR
   res.writeHead(200, { "Content-Type": "text/plain" }).end(report);
 }
 
+/** Phase 5.1: the partner-access risk register — only platforms with a real,
+ * filled-in entry are returned (the rest would just be noise: an "unknown,
+ * unassessed" object repeated ~70 times). Use statusOfPartnerAccess(platform)
+ * directly to look up any single platform, including unassessed ones. */
+async function handlePartnerAccessRiskRoute(req: http.IncomingMessage, res: http.ServerResponse) {
+  const register = (Object.keys(PARTNER_ACCESS_RISK) as Platform[]).map((platform) => statusOfPartnerAccess(platform));
+  res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(register));
+}
+
+/** Phase 5.3: Twilio call-status webhook for missed-call text-back. Resolves
+ * the business by the number the customer called — business.phone is reused
+ * as "the number customers call," matching its existing meaning elsewhere in
+ * the codebase (there's no separate inbound-number column). */
+async function handleMissedCallWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+  const params = new URLSearchParams(body);
+  const from = params.get("From");
+  const to = params.get("To");
+
+  if (!from || !to) {
+    res.writeHead(400).end();
+    return;
+  }
+
+  const { data: business, error } = await supabase.from("business").select("id").eq("phone", to).maybeSingle();
+  if (error || !business) {
+    res.writeHead(404).end();
+    return;
+  }
+
+  await handleMissedCall(business.id, from);
+  res.writeHead(200, { "Content-Type": "text/xml" }).end("<Response></Response>");
+}
+
+/** Phase 5.3: owner (or future agent) reply to a customer thread. Looks up
+ * the channel from the most recent inbound message for that identifier; only
+ * "sms" actually sends (via the existing sendApprovalSms) — other channels
+ * just record the row since there's no real webchat/DM send integration to
+ * call yet, rather than faking a send. */
+async function handleCustomerMessageReplyRoute(req: http.IncomingMessage, res: http.ServerResponse, businessId: string) {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+
+  let payload;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    res.writeHead(400).end();
+    return;
+  }
+
+  if (!payload.customer_identifier || !payload.body) {
+    res.writeHead(400).end();
+    return;
+  }
+
+  const channel = await getLatestInboundChannel(businessId, payload.customer_identifier);
+  if (!channel) {
+    res.writeHead(404).end();
+    return;
+  }
+
+  if (channel === "sms") {
+    await sendApprovalSms(payload.customer_identifier, payload.body);
+  }
+
+  await recordCustomerMessage({
+    businessId,
+    channel,
+    direction: "outbound",
+    customerIdentifier: payload.customer_identifier,
+    body: payload.body,
+  });
+
+  res.writeHead(200).end();
+}
+
 /** Webhook receiver for inbound Twilio SMS replies and Reach review events. */
 const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && req.url === "/webhooks/sms") {
@@ -136,6 +218,14 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "POST" && req.url === "/webhooks/reach-review") {
     await handleReachWebhook(req, res);
+    return;
+  }
+  if (req.method === "POST" && req.url === "/webhooks/missed-call") {
+    await handleMissedCallWebhook(req, res);
+    return;
+  }
+  if (req.method === "GET" && req.url === "/platforms/partner-access-risk") {
+    await handlePartnerAccessRiskRoute(req, res);
     return;
   }
   const connectionsMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/connections$/);
@@ -151,6 +241,11 @@ const server = http.createServer(async (req, res) => {
   const orgReportMatch = req.method === "GET" && req.url?.match(/^\/organizations\/([^/]+)\/report$/);
   if (orgReportMatch) {
     await handleOrgReportRoute(req, res, orgReportMatch[1]);
+    return;
+  }
+  const customerMessageReplyMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/messages$/);
+  if (customerMessageReplyMatch) {
+    await handleCustomerMessageReplyRoute(req, res, customerMessageReplyMatch[1]);
     return;
   }
   res.writeHead(404).end();

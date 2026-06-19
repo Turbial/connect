@@ -618,3 +618,26 @@ create table if not exists content_library_item (
 );
 
 create index if not exists idx_content_library_item_organization on content_library_item(organization_id);
+
+-- ── Development Program Phase 5: Durable Moats (5.1, 5.3) ──────────────────
+
+-- 5.1 (partner access risk register) is intentionally not a table — it's a
+-- maintainable in-code structure (src/lib/partnerAccessRisk.ts), not data
+-- needing persistence/history, per the development program's own framing.
+
+-- 5.3: business-facing two-way messaging (the business's own customers
+-- texting/chatting with the business) — distinct from approval_request,
+-- which is Connect-to-owner, not customer-to-business. body is null for
+-- missed-call-only events (src/lib/missedCallTextback.ts).
+create table if not exists customer_message (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  channel text not null, -- sms | webchat | dm_instagram | dm_facebook | missed_call
+  direction text not null, -- inbound | outbound
+  customer_identifier text not null,
+  body text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_customer_message_business on customer_message(business_id, created_at);
+create index if not exists idx_customer_message_identifier on customer_message(business_id, customer_identifier);

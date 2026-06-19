@@ -492,3 +492,18 @@ export interface VisibilityScore {
   recommendations: string[];
   computed_at: string;
 }
+
+/** Phase 5.3: business-facing two-way messaging — the business's own
+ * customers texting/chatting with the business, distinct from
+ * ApprovalRequest (Connect-to-owner). customer_identifier is a phone number,
+ * chat session id, or social handle depending on channel; body is null for
+ * missed-call-only events. */
+export interface CustomerMessage {
+  id: string;
+  business_id: string;
+  channel: "sms" | "webchat" | "dm_instagram" | "dm_facebook" | "missed_call";
+  direction: "inbound" | "outbound";
+  customer_identifier: string;
+  body: string | null;
+  created_at: string;
+}
