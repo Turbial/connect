@@ -168,3 +168,47 @@ alter table business add column if not exists wechat_access_token text;
 -- and sentiment-aware tone adjustment for review-triggered content.
 
 alter table business add column if not exists preferred_language text;
+
+-- ── Phase 10: service module expansion (SEO audit, competitor monitoring, ──
+-- ── listings/NAP sync) ───────────────────────────────────────────────────
+-- Triples the product's service offering beyond posting/AI: a local SEO/
+-- citation completeness audit, competitor rating/review tracking, and NAP
+-- (Name/Address/Phone) sync back out to connected platforms.
+
+create table if not exists seo_audit (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  score integer not null,
+  issues text[] not null default array[]::text[],
+  run_at timestamptz not null default now()
+);
+
+create table if not exists competitor (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  name text not null,
+  gbp_place_id text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists competitor_snapshot (
+  id uuid primary key default gen_random_uuid(),
+  competitor_id uuid not null references competitor(id) on delete cascade,
+  rating numeric,
+  review_count integer,
+  captured_at timestamptz not null default now()
+);
+
+create table if not exists listing_sync (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references business(id) on delete cascade,
+  platform text not null,
+  status text not null, -- success | failed
+  detail text,
+  synced_at timestamptz not null default now()
+);
+
+create index if not exists idx_seo_audit_business on seo_audit(business_id);
+create index if not exists idx_competitor_business on competitor(business_id);
+create index if not exists idx_competitor_snapshot_competitor on competitor_snapshot(competitor_id);
+create index if not exists idx_listing_sync_business on listing_sync(business_id);

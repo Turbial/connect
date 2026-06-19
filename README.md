@@ -20,8 +20,12 @@ clear module boundaries below.
 | `src/ads` | `creative.ts` generates ad copy/images from a high-performing organic post (TurboAd exposes no callable API, so this reimplements its DeepSeek/fal.ai pattern directly). `metaAds.ts`/`googleAds.ts` launch real, paused campaigns via the Meta Marketing API and Google Ads API. |
 | `src/reach-integration` | Handles inbound Reach review events: stores the review and, for positive reviews with text, queues review-triggered content (Phase 4). |
 | `src/reporting` | Builds and sends the weekly owner-facing digest, including boost/ad activity. |
+| `src/seo-audit` | Phase 10: runs a local SEO/citation completeness audit (`runSeoAudit`) against the business's own NAP record, scoring it 0-100 and flagging gaps. |
+| `src/competitor-monitor` | Phase 10: tracks named competitors per business (`addCompetitor`) and captures rating/review-count snapshots over time via the Google Places API (`captureCompetitorSnapshots`). |
+| `src/listings` | Phase 10: syncs the business's canonical NAP info out to connected platforms' profiles (`syncListingInfo`), starting with GBP's Business Information API. |
 | `src/jobs/weeklyBatch.ts` | Cron entrypoint: generate → request approval → resolve timeouts → post approved → send report. |
 | `src/jobs/collectPerformance.ts` | Cron entrypoint: poll insights for all businesses, then evaluate boost triggers. |
+| `src/jobs/runServiceModules.ts` | Cron entrypoint: runs the SEO audit, competitor snapshot capture, and listing sync for all businesses (`npm run services`). |
 | `src/index.ts` | HTTP server for Twilio's inbound SMS webhook (`/webhooks/sms`, disambiguating content vs. boost replies) and Reach's review webhook (`/webhooks/reach-review`). |
 
 ## Setup
@@ -32,7 +36,8 @@ clear module boundaries below.
 3. `npm install`
 4. `npm run weekly` to run the weekly batch job manually, or wire it to a scheduler.
 5. `npm run collect` to poll performance and evaluate boost triggers.
-6. `npm run dev` to start the webhook server.
+6. `npm run services` to run the SEO audit, competitor snapshot capture, and listing sync.
+7. `npm run dev` to start the webhook server.
 
 ## Known gaps to resolve before production
 - Hashtag generation (`generateHashtags`) and translation (`translateCaption`) are each
@@ -91,3 +96,12 @@ clear module boundaries below.
 - WeChat (`wechat.ts`) targets the Official Account draft → freepublish flow, which
   requires a verified service account in mainland China — confirm account tier
   requirements once WeChat platform access is pursued.
+- `src/seo-audit`'s audit only checks the business's own NAP record completeness,
+  not what's actually live on each platform's listing — a true citation-consistency
+  audit (comparing our record against each platform's current listing) would need a
+  read API per platform, same confirmation caveat as every distribution adapter.
+- `src/listings`' `syncListingInfo` only syncs GBP today; most other platforms don't
+  expose a stable, publicly documented business-info update endpoint usable without
+  partner access — extend platform-by-platform as those are confirmed.
+- `src/competitor-monitor` only tracks GBP-based competitors (via Places API place
+  id); competitors without a Google Business Profile aren't trackable yet.

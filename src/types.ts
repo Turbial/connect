@@ -124,3 +124,36 @@ export interface AdCreative {
   imagePrompts: string[];
   imageUrls: string[];
 }
+
+export interface Competitor {
+  id: string;
+  business_id: string;
+  name: string;
+  gbp_place_id: string | null;
+  created_at: string;
+}
+
+export interface CompetitorSnapshot {
+  id: string;
+  competitor_id: string;
+  rating: number | null;
+  review_count: number | null;
+  captured_at: string;
+}
+
+export interface SeoAuditResult {
+  id: string;
+  business_id: string;
+  score: number;
+  issues: string[];
+  run_at: string;
+}
+
+export interface ListingSyncResult {
+  id: string;
+  business_id: string;
+  platform: string;
+  status: "success" | "failed";
+  detail: string | null;
+  synced_at: string;
+}
