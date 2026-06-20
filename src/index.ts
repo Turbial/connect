@@ -341,68 +341,75 @@ async function handleCustomerMessageReplyRoute(req: http.IncomingMessage, res: h
 }
 
 /** Webhook receiver for inbound Twilio SMS replies and Reach review events. */
-const server = http.createServer(async (req, res) => {
-  if (req.method === "POST" && req.url === "/webhooks/sms") {
-    await handleSmsWebhook(req, res);
-    return;
-  }
-  if (req.method === "POST" && req.url === "/webhooks/whatsapp") {
-    await handleWhatsappWebhook(req, res);
-    return;
-  }
-  if (req.method === "POST" && req.url === "/webhooks/reach-review") {
-    await handleReachWebhook(req, res);
-    return;
-  }
-  if (req.method === "POST" && req.url === "/webhooks/missed-call") {
-    await handleMissedCallWebhook(req, res);
-    return;
-  }
-  if (req.method === "GET" && req.url === "/platforms/partner-access-risk") {
-    await handlePartnerAccessRiskRoute(req, res);
-    return;
-  }
-  if (req.method === "GET" && req.url === "/platforms/status") {
-    await handlePlatformStatusRoute(req, res);
-    return;
-  }
-  const connectionsMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/connections$/);
-  if (connectionsMatch) {
-    await handleConnectionsRoute(req, res, connectionsMatch[1]);
-    return;
-  }
-  const sendVerificationMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/owner-verification\/send$/);
-  if (sendVerificationMatch) {
-    await handleSendOwnerVerificationRoute(req, res, sendVerificationMatch[1]);
-    return;
-  }
-  const confirmVerificationMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/owner-verification\/confirm$/);
-  if (confirmVerificationMatch) {
-    await handleConfirmOwnerVerificationRoute(req, res, confirmVerificationMatch[1]);
-    return;
-  }
-  const visibilityScoreMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/visibility-score$/);
-  if (visibilityScoreMatch) {
-    await handleVisibilityScoreRoute(req, res, visibilityScoreMatch[1]);
-    return;
-  }
-  const operatorSnapshotMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/operator-snapshot$/);
-  if (operatorSnapshotMatch) {
-    await handleOperatorSnapshotRoute(req, res, operatorSnapshotMatch[1]);
-    return;
-  }
-  const orgReportMatch = req.method === "GET" && req.url?.match(/^\/organizations\/([^/]+)\/report$/);
-  if (orgReportMatch) {
-    await handleOrgReportRoute(req, res, orgReportMatch[1]);
-    return;
-  }
-  const customerMessageReplyMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/messages$/);
-  if (customerMessageReplyMatch) {
-    await handleCustomerMessageReplyRoute(req, res, customerMessageReplyMatch[1]);
-    return;
-  }
-  res.writeHead(404).end();
-});
+export function startWebhookServer(port: number): ReturnType<typeof http.createServer> {
+  const server = http.createServer(async (req, res) => {
+    if (req.method === "POST" && req.url === "/webhooks/sms") {
+      await handleSmsWebhook(req, res);
+      return;
+    }
+    if (req.method === "POST" && req.url === "/webhooks/whatsapp") {
+      await handleWhatsappWebhook(req, res);
+      return;
+    }
+    if (req.method === "POST" && req.url === "/webhooks/reach-review") {
+      await handleReachWebhook(req, res);
+      return;
+    }
+    if (req.method === "POST" && req.url === "/webhooks/missed-call") {
+      await handleMissedCallWebhook(req, res);
+      return;
+    }
+    if (req.method === "GET" && req.url === "/platforms/partner-access-risk") {
+      await handlePartnerAccessRiskRoute(req, res);
+      return;
+    }
+    if (req.method === "GET" && req.url === "/platforms/status") {
+      await handlePlatformStatusRoute(req, res);
+      return;
+    }
+    const connectionsMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/connections$/);
+    if (connectionsMatch) {
+      await handleConnectionsRoute(req, res, connectionsMatch[1]);
+      return;
+    }
+    const sendVerificationMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/owner-verification\/send$/);
+    if (sendVerificationMatch) {
+      await handleSendOwnerVerificationRoute(req, res, sendVerificationMatch[1]);
+      return;
+    }
+    const confirmVerificationMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/owner-verification\/confirm$/);
+    if (confirmVerificationMatch) {
+      await handleConfirmOwnerVerificationRoute(req, res, confirmVerificationMatch[1]);
+      return;
+    }
+    const visibilityScoreMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/visibility-score$/);
+    if (visibilityScoreMatch) {
+      await handleVisibilityScoreRoute(req, res, visibilityScoreMatch[1]);
+      return;
+    }
+    const operatorSnapshotMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/operator-snapshot$/);
+    if (operatorSnapshotMatch) {
+      await handleOperatorSnapshotRoute(req, res, operatorSnapshotMatch[1]);
+      return;
+    }
+    const orgReportMatch = req.method === "GET" && req.url?.match(/^\/organizations\/([^/]+)\/report$/);
+    if (orgReportMatch) {
+      await handleOrgReportRoute(req, res, orgReportMatch[1]);
+      return;
+    }
+    const customerMessageReplyMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/messages$/);
+    if (customerMessageReplyMatch) {
+      await handleCustomerMessageReplyRoute(req, res, customerMessageReplyMatch[1]);
+      return;
+    }
+    res.writeHead(404).end();
+  });
 
-const port = Number(process.env.PORT ?? 3000);
-server.listen(port, () => console.log(`Distribution Layer listening on :${port}`));
+  server.listen(port, () => console.log(`Distribution Layer listening on :${port}`));
+  return server;
+}
+
+const isMain = process.argv[1] && /index\.(ts|js)$/.test(process.argv[1]);
+if (isMain) {
+  startWebhookServer(Number(process.env.PORT ?? 3000));
+}

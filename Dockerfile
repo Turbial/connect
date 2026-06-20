@@ -11,5 +11,5 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
 COPY --from=base /app/dist ./dist
-EXPOSE 3000
-CMD ["node", "dist/index.js"]
+EXPOSE 3000 8787
+CMD ["node", "dist/start-all.js"]
