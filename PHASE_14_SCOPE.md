@@ -106,6 +106,16 @@ folds it into the DeepSeek prompt. Strictly additive/best-effort — content
 generation must not start failing if analytics has no data yet (new
 businesses, low post volume).
 
+**Shipped as:** `getStyleNudge(business)` in `src/content-analytics/index.ts`
+— calls `analyzeContentPerformance`, picks up to 3 significant insights
+(structural and qualitative, excluding `posting_time`), and joins them into
+one short clause. `generate.ts`'s `generateCaption`/`generateCaptionVariantB`
+take it as an optional parameter and fold it into the DeepSeek prompt as
+"Past posts from this business have performed best when they: ...". Any
+failure (no posting history yet, a transient DB/DeepSeek error) returns
+`null` from `getStyleNudge`, which simply omits the clause — generation
+never fails because analytics has no data.
+
 ## Explicitly out of scope for Phase 14
 
 Cross-business/competitor content benchmarking (Connect has no read access
@@ -124,4 +134,4 @@ project's no-heavy-dependencies convention).
 - [x] 14.2 Qualitative caption analysis
 - [x] 14.3 Trend/virality detection
 - [x] 14.4 Predictive draft scoring
-- [ ] 14.5 Feed insights back into content generation
+- [x] 14.5 Feed insights back into content generation

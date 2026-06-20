@@ -1,5 +1,6 @@
 import { getOrganizationForBusiness } from "../lib/orgSettings.js";
 import { getBrandMemory } from "../lib/brandMemory.js";
+import { getStyleNudge } from "../content-analytics/index.js";
 import type { Business, BrandMemory, GeneratedPost, MediaType, Platform, Surface } from "../types.js";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
@@ -135,20 +136,29 @@ function brandMemoryGuidanceLine(memory: BrandMemory[]): string {
   return ` Apply this brand guidance learned from past feedback: ${notes.join("; ")}.`;
 }
 
+/** Phase 14.5: a short clause folding the business's own significant
+ * performance patterns into the prompt by default, so generation leans into
+ * what's already worked rather than only reporting it after the fact. */
+function styleNudgeLine(styleNudge: string | null): string {
+  return styleNudge ? ` Past posts from this business have performed best when they: ${styleNudge}.` : "";
+}
+
 async function generateCaption(
   business: Business,
   platform: Platform,
   context?: string,
   reviewRating?: number | null,
-  memory: BrandMemory[] = []
+  memory: BrandMemory[] = [],
+  styleNudge: string | null = null
 ): Promise<string> {
   const contextLine = context ? ` Base it on this: ${context}.` : "";
   const tone = sentimentTone(reviewRating);
   const toneLine = tone ? ` Write in a tone that's ${tone}, reflecting the sentiment of the feedback it's based on.` : "";
   const memoryLine = brandMemoryGuidanceLine(memory);
+  const nudgeLine = styleNudgeLine(styleNudge);
 
   const result = await callDeepSeek(
-    `Write ${platformBrief(platform)} for ${business.name}, located in ${business.location ?? "the local area"}.${contextLine}${toneLine}${memoryLine} Keep it specific and concrete, not generic marketing copy.`
+    `Write ${platformBrief(platform)} for ${business.name}, located in ${business.location ?? "the local area"}.${contextLine}${toneLine}${memoryLine}${nudgeLine} Keep it specific and concrete, not generic marketing copy.`
   );
   return result ?? `Check out what's new at ${business.name} this week!`;
 }
@@ -162,15 +172,17 @@ async function generateCaptionVariantB(
   platform: Platform,
   context?: string,
   reviewRating?: number | null,
-  memory: BrandMemory[] = []
+  memory: BrandMemory[] = [],
+  styleNudge: string | null = null
 ): Promise<string | null> {
   const contextLine = context ? ` Base it on this: ${context}.` : "";
   const tone = sentimentTone(reviewRating);
   const toneLine = tone ? ` Write in a tone that's ${tone}, reflecting the sentiment of the feedback it's based on.` : "";
   const memoryLine = brandMemoryGuidanceLine(memory);
+  const nudgeLine = styleNudgeLine(styleNudge);
 
   return callDeepSeek(
-    `Write a second, alternative version of ${platformBrief(platform)} for ${business.name}, located in ${business.location ?? "the local area"}.${contextLine}${toneLine}${memoryLine} Take a noticeably different angle or hook than a typical first draft would, while staying just as specific and concrete.`
+    `Write a second, alternative version of ${platformBrief(platform)} for ${business.name}, located in ${business.location ?? "the local area"}.${contextLine}${toneLine}${memoryLine}${nudgeLine} Take a noticeably different angle or hook than a typical first draft would, while staying just as specific and concrete.`
   );
 }
 
@@ -297,8 +309,9 @@ export async function generatePost(
   requestedSurface?: Surface
 ): Promise<GeneratedPost> {
   const memory = await getBrandMemory(business.id);
-  let caption = await generateCaption(business, platform, context, reviewRating, memory);
-  let captionVariantB = await generateCaptionVariantB(business, platform, context, reviewRating, memory);
+  const styleNudge = await getStyleNudge(business);
+  let caption = await generateCaption(business, platform, context, reviewRating, memory, styleNudge);
+  let captionVariantB = await generateCaptionVariantB(business, platform, context, reviewRating, memory, styleNudge);
 
   // Phase 4.1: union business-level banned words with the business's org-level
   // defaults (if any) — banned words are a safety guardrail, so an org default

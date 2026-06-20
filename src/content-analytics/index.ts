@@ -516,3 +516,23 @@ export async function predictDraftScore(business: Business, draftItem: ContentIt
 
   return { score, reason };
 }
+
+/** Phase 14.5: a short style nudge (e.g. "favor video media", "Question-style
+ * hooks") sourced from this business's own significant performance insights,
+ * for `content-engine` to fold into its generation prompt by default rather
+ * than only reporting these patterns after the fact. Best-effort: any
+ * failure (no posting history yet, a transient DB error) returns null so
+ * content generation is never blocked on analytics having data. */
+export async function getStyleNudge(business: Business): Promise<string | null> {
+  try {
+    const { insights } = await analyzeContentPerformance(business);
+    const significant = insights.filter((insight) => insight.significant && insight.attribute !== "posting_time");
+    if (significant.length === 0) return null;
+    return significant
+      .slice(0, 3)
+      .map((insight) => (insight.attribute === "caption_quality" ? insight.topValue : insight.summary.split(":")[0]))
+      .join("; ");
+  } catch {
+    return null;
+  }
+}
