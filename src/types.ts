@@ -653,7 +653,14 @@ export interface CustomerMessage {
  * system takes becomes a record, logged as a parallel audit trail this
  * phase (the existing weekly-batch/trigger code paths are not rewritten to
  * depend on this table yet). */
-export type AgentActionSource = "weekly_job" | "owner_message" | "customer_message" | "review" | "missed_call" | "performance_trigger";
+export type AgentActionSource =
+  | "weekly_job"
+  | "owner_message"
+  | "customer_message"
+  | "review"
+  | "missed_call"
+  | "performance_trigger"
+  | "external_agent";
 export type AgentActionStatus = "pending" | "completed" | "failed" | "awaiting_approval";
 export type AgentActionRiskLevel = "low" | "medium" | "high";
 

@@ -44,12 +44,20 @@ export interface ToolCallResult<T = unknown> {
 }
 
 interface ToolDefinition {
+  description: string;
   riskLevel: AgentActionRiskLevel;
   approvalRequired: boolean;
   /** Executes the tool's real action against `business`. */
   run(business: Business): Promise<unknown>;
   /** Side-effect-free preview of what `run` would do. */
   preview(business: Business): Promise<unknown>;
+}
+
+export interface ToolCatalogEntry {
+  name: ToolName;
+  description: string;
+  riskLevel: AgentActionRiskLevel;
+  approvalRequired: boolean;
 }
 
 async function fetchBusiness(businessId: string): Promise<Business | null> {
@@ -60,24 +68,28 @@ async function fetchBusiness(businessId: string): Promise<Business | null> {
 
 const TOOLS: Record<ToolName, ToolDefinition> = {
   get_operator_snapshot: {
+    description: "Read-only snapshot of a business's current state: score, connections, pending approvals/boosts, unresolved reviews, recent actions.",
     riskLevel: "low",
     approvalRequired: false,
     run: (b) => buildOperatorSnapshot(b.id),
     preview: (b) => buildOperatorSnapshot(b.id),
   },
   get_visibility_score: {
+    description: "The business's most recently computed Local Visibility Score, with trend, drivers, and next-best-fix.",
     riskLevel: "low",
     approvalRequired: false,
     run: (b) => getLatestVisibilityScore(b.id),
     preview: (b) => getLatestVisibilityScore(b.id),
   },
   get_connection_health: {
+    description: "Per-platform connection status for the business, flagging which need reconnection.",
     riskLevel: "low",
     approvalRequired: false,
     run: (b) => getConnectionSummary(b.id),
     preview: (b) => getConnectionSummary(b.id),
   },
   get_pending_approvals: {
+    description: "Content items currently awaiting owner approval.",
     riskLevel: "low",
     approvalRequired: false,
     run: (b) => getPendingApprovals(b.id),
@@ -86,6 +98,7 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
   // Read tools above never have side effects, so their dry-run preview is
   // identical to a real call — there is nothing to defer.
   queue_content: {
+    description: "Generates this week's content drafts for the business and routes them through owner approval.",
     riskLevel: "low",
     approvalRequired: false,
     run: async (b) => {
@@ -95,6 +108,7 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
     preview: async (b) => ({ wouldQueue: true, businessId: b.id }),
   },
   propose_boost: {
+    description: "Evaluates whether any recent organic post qualifies for a paid boost and, if so, requests owner approval to launch it as a real (paused) ad.",
     riskLevel: "medium",
     approvalRequired: true,
     run: async (b) => {
@@ -104,6 +118,7 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
     preview: async (b) => ({ wouldEvaluate: true, businessId: b.id, riskLevel: "medium", approvalRequired: true }),
   },
   run_visibility_audit: {
+    description: "Recomputes and persists a fresh Local Visibility Score from the business's current signals.",
     riskLevel: "low",
     approvalRequired: false,
     run: (b) => computeVisibilityScore(b.id),
@@ -112,6 +127,18 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
     preview: (b) => getLatestVisibilityScore(b.id),
   },
 };
+
+/** Phase 10: the tool catalog an external agent (e.g. Claude, via the agent
+ * API) discovers before calling anything — name/description/risk/approval
+ * only, never the implementation, so a new tool can't be exposed by accident. */
+export function getToolCatalog(): ToolCatalogEntry[] {
+  return (Object.keys(TOOLS) as ToolName[]).map((name) => ({
+    name,
+    description: TOOLS[name].description,
+    riskLevel: TOOLS[name].riskLevel,
+    approvalRequired: TOOLS[name].approvalRequired,
+  }));
+}
 
 /** Dispatches a single tool call: validates the business exists, runs (or
  * previews, if `dryRun`) the tool, and writes its agent_action row either
