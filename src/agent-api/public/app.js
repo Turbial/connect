@@ -226,6 +226,96 @@ el("saveCredentialsBtn").addEventListener("click", async () => {
   }
 });
 
+function showOnboardingError(message) {
+  const box = el("onboardingError");
+  box.textContent = message;
+  box.hidden = !message;
+}
+
+el("createBusinessBtn").addEventListener("click", async () => {
+  showOnboardingError("");
+  const name = el("newBusinessName").value.trim();
+  if (!name) {
+    showOnboardingError("Business name is required.");
+    return;
+  }
+  const apiKey = el("apiKey").value.trim();
+  if (!apiKey) {
+    showOnboardingError("Enter an Agent API key above first.");
+    return;
+  }
+  try {
+    const res = await fetch("/businesses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        name,
+        location: el("newBusinessLocation").value.trim() || undefined,
+        phone: el("newBusinessPhone").value.trim() || undefined,
+        ownerPhone: el("newBusinessOwnerPhone").value.trim() || undefined,
+        ownerEmail: el("newBusinessOwnerEmail").value.trim() || undefined,
+        ownerMobile: el("newBusinessOwnerMobile").value.trim() || undefined,
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.error || `Request failed (${res.status})`);
+
+    state.apiKey = apiKey;
+    state.businessId = body.business.id;
+    localStorage.setItem("connect_api_key", apiKey);
+    localStorage.setItem("connect_business_id", state.businessId);
+    el("businessId").value = state.businessId;
+    el("createBusinessResult").textContent = `Created "${body.business.name}" — id ${body.business.id}. Loaded below; add platform credentials next.`;
+    await loadSnapshot();
+  } catch (err) {
+    showOnboardingError(err.message);
+  }
+});
+
+el("sendVerificationBtn").addEventListener("click", async () => {
+  showOnboardingError("");
+  const apiKey = el("apiKey").value.trim();
+  const businessId = el("businessId").value.trim();
+  if (!apiKey || !businessId) {
+    showOnboardingError("Enter both an API key and a business ID above first.");
+    return;
+  }
+  try {
+    const res = await fetch(`/businesses/${businessId}/owner-verification/send`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.error || `Request failed (${res.status})`);
+    el("verificationResult").textContent = "Code sent — check the owner's phone.";
+  } catch (err) {
+    showOnboardingError(err.message);
+  }
+});
+
+el("confirmVerificationBtn").addEventListener("click", async () => {
+  showOnboardingError("");
+  const apiKey = el("apiKey").value.trim();
+  const businessId = el("businessId").value.trim();
+  const code = el("verificationCode").value.trim();
+  if (!apiKey || !businessId || !code) {
+    showOnboardingError("Enter an API key, business ID, and code first.");
+    return;
+  }
+  try {
+    const res = await fetch(`/businesses/${businessId}/owner-verification/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ code }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.error || `Request failed (${res.status})`);
+    el("verificationResult").textContent = body.verified ? "Verified." : "Incorrect or expired code.";
+  } catch (err) {
+    showOnboardingError(err.message);
+  }
+});
+
 if (state.apiKey && state.businessId) {
   loadSnapshot();
 }

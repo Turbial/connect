@@ -6,7 +6,10 @@ import { isKnownToolName, matchRoute } from "./router.js";
 import { contentTypeFor, staticFileFor } from "./staticFiles.js";
 import { callTool, getToolCatalog, type ToolName } from "../tools/registry.js";
 import { credentialFieldsFor } from "../lib/platformCredentials.js";
-import type { Platform } from "../types.js";
+import { createBusiness } from "../lib/business.js";
+import { sendOwnerVerificationCode, confirmOwnerVerification } from "../lib/ownerVerification.js";
+import { supabase } from "../lib/supabase.js";
+import type { Business, Platform } from "../types.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("./public", import.meta.url));
 
@@ -90,6 +93,68 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
 
   if (route.kind === "platform_credential_fields") {
     sendJson(res, 200, { platform: route.platform, fields: credentialFieldsFor(route.platform as Platform) });
+    return;
+  }
+
+  if (route.kind === "create_business") {
+    let body: Record<string, unknown>;
+    try {
+      body = await readJsonBody(req);
+    } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : "Invalid request body" });
+      return;
+    }
+    try {
+      const business = await createBusiness({
+        name: body.name as string,
+        location: body.location as string | undefined,
+        phone: body.phone as string | undefined,
+        ownerPhone: body.ownerPhone as string | undefined,
+        ownerEmail: body.ownerEmail as string | undefined,
+        ownerMobile: body.ownerMobile as string | undefined,
+      });
+      sendJson(res, 201, { business });
+    } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : "Failed to create business" });
+    }
+    return;
+  }
+
+  if (route.kind === "send_owner_verification") {
+    try {
+      const { data: businessRow, error } = await supabase.from("business").select("*").eq("id", route.businessId).maybeSingle();
+      if (error) throw error;
+      if (!businessRow) {
+        sendJson(res, 404, { error: "Business not found" });
+        return;
+      }
+      await sendOwnerVerificationCode(businessRow as Business);
+      sendJson(res, 200, { sent: true });
+    } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : "Failed to send verification code" });
+    }
+    return;
+  }
+
+  if (route.kind === "confirm_owner_verification") {
+    let body: Record<string, unknown>;
+    try {
+      body = await readJsonBody(req);
+    } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : "Invalid request body" });
+      return;
+    }
+    const code = body.code as string | undefined;
+    if (!code) {
+      sendJson(res, 400, { error: '"code" is required' });
+      return;
+    }
+    try {
+      const verified = await confirmOwnerVerification(route.businessId, code);
+      sendJson(res, verified ? 200 : 400, { verified });
+    } catch (err) {
+      sendJson(res, 500, { error: err instanceof Error ? err.message : "Failed to confirm verification code" });
+    }
     return;
   }
 

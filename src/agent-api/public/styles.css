@@ -81,6 +81,11 @@ main {
   margin-bottom: 0.5rem;
 }
 
+.muted {
+  color: #9aa3b2;
+  font-size: 0.9rem;
+}
+
 .error {
   background: #3a1c1c;
   border: 1px solid #7a2c2c;

@@ -47,7 +47,7 @@ gaps below.
 | `src/tools` | Phase 8.10: the typed tool registry (`callTool`/`getToolCatalog`) every agent-facing surface below dispatches through — same dry-run/approval/audit-log behavior for every caller. |
 | `src/agent-api` | Phase 10: a minimal bearer-token-authed HTTP API (`GET /tools`, `POST /tools/:name`) exposing the tool registry to any agent able to make HTTP calls (`npm run agent-api`). |
 | `src/mcp` | Phase 12: an MCP stdio server (`npm run mcp`) exposing the same tool registry over the Model Context Protocol, so Claude Desktop/Code (or any other MCP client) can attach to Connect directly as a tool-using agent. |
-| `src/agent-api/public` | Phase 13: a minimal static operator dashboard (snapshot/score/connections/approvals/boosts/reviews/recent actions, plus actions to queue content, run a visibility audit, evaluate boost triggers, and set platform credentials), served by the agent-api server at `/` and calling its own `/tools/:name` endpoints with an API key entered in the page. |
+| `src/agent-api/public` | Phase 13: a minimal static operator dashboard (snapshot/score/connections/approvals/boosts/reviews/recent actions, plus actions to queue content, run a visibility audit, evaluate boost triggers, and set platform credentials), served by the agent-api server at `/` and calling its own `/tools/:name` endpoints with an API key entered in the page. Phase 15: adds a "New business" form (`POST /businesses`) and owner-verification send/confirm controls (`POST /businesses/:id/owner-verification/send`/`confirm`), so a business can be created and the owner verified entirely from the dashboard instead of a manual DB insert. |
 
 ## Setup
 1. Copy `.env.example` to `.env` and fill in Supabase, Twilio, DeepSeek, fal.ai, Meta,
@@ -97,8 +97,12 @@ insights back into content generation.
   `src/lib/orgSettings.ts`'s `resolveBusinessSetting` (falling back to the
   `VIEWS_THRESHOLD`/`ENGAGEMENT_THRESHOLD`/`DEFAULT_BUDGET_CENTS` constants only when a
   business hasn't set `boost_views_threshold`/`boost_engagement_threshold`/`boost_budget_cents`).
-- `business` rows (platform tokens, ad account ids, owner contact info) are assumed to
-  be seeded manually; no onboarding UI exists.
+- Creating a business and setting platform credentials/owner verification can now be
+  done entirely from the dashboard (Phase 15's "New business" form + owner-verification
+  controls), but there's still no per-customer login — every operator action (including
+  business creation) is gated by the single shared `CONNECT_AGENT_API_KEY`, not a
+  per-customer account. Fine for an agency managing its own clients; a true self-serve
+  public signup would need a real multi-tenant user/auth model, which doesn't exist yet.
 - TikTok's adapter (`tiktok.ts`) uses the Content Posting API's `PULL_FROM_URL` init
   flow against the fal.ai-hosted video URL; this requires the app to be out of
   TikTok's sandbox/audit review before `PUBLIC_TO_EVERYONE` posts are allowed —

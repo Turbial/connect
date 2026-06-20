@@ -32,6 +32,24 @@ describe("matchRoute", () => {
       platform: "facebook",
     });
   });
+
+  it("matches business creation", () => {
+    expect(matchRoute("POST", "/businesses")).toEqual({ kind: "create_business" });
+  });
+
+  it("matches sending an owner verification code and extracts the business id", () => {
+    expect(matchRoute("POST", "/businesses/abc-123/owner-verification/send")).toEqual({
+      kind: "send_owner_verification",
+      businessId: "abc-123",
+    });
+  });
+
+  it("matches confirming an owner verification code and extracts the business id", () => {
+    expect(matchRoute("POST", "/businesses/abc-123/owner-verification/confirm")).toEqual({
+      kind: "confirm_owner_verification",
+      businessId: "abc-123",
+    });
+  });
 });
 
 describe("isKnownToolName", () => {

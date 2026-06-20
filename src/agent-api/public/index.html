@@ -17,6 +17,39 @@
     </div>
   </header>
 
+  <main id="onboarding">
+    <section id="onboardingError" class="error" hidden></section>
+    <section class="card">
+      <h2>New business</h2>
+      <p class="muted">Set this business up for the first time, then load it above with the same API key.</p>
+      <div class="row">
+        <input id="newBusinessName" type="text" placeholder="Business name (required)" />
+        <input id="newBusinessLocation" type="text" placeholder="Location" />
+      </div>
+      <div class="row">
+        <input id="newBusinessPhone" type="text" placeholder="Business phone" />
+        <input id="newBusinessOwnerPhone" type="text" placeholder="Owner phone (SMS approvals)" />
+      </div>
+      <div class="row">
+        <input id="newBusinessOwnerEmail" type="text" placeholder="Owner email" />
+        <input id="newBusinessOwnerMobile" type="text" placeholder="Owner mobile (WhatsApp)" />
+      </div>
+      <button id="createBusinessBtn">Create business</button>
+      <div id="createBusinessResult"></div>
+    </section>
+
+    <section class="card">
+      <h2>Owner verification</h2>
+      <p class="muted">Confirms the owner's phone before the weekly content loop will run for them.</p>
+      <button id="sendVerificationBtn">Send code</button>
+      <div class="row">
+        <input id="verificationCode" type="text" placeholder="6-digit code" />
+        <button id="confirmVerificationBtn">Confirm</button>
+      </div>
+      <div id="verificationResult"></div>
+    </section>
+  </main>
+
   <main id="app" hidden>
     <section id="error" class="error" hidden></section>
 

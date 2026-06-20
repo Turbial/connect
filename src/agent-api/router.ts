@@ -6,7 +6,10 @@ export type Route =
   | { kind: "health" }
   | { kind: "list_tools" }
   | { kind: "call_tool"; toolName: string }
-  | { kind: "platform_credential_fields"; platform: string };
+  | { kind: "platform_credential_fields"; platform: string }
+  | { kind: "create_business" }
+  | { kind: "send_owner_verification"; businessId: string }
+  | { kind: "confirm_owner_verification"; businessId: string };
 
 /** Phase 10: pure request-path matching for the agent API, kept separate
  * from the http server itself so routing logic is unit-testable without
@@ -25,6 +28,18 @@ export function matchRoute(method: string, path: string): Route | null {
   const platformFieldsMatch = /^\/platforms\/([a-z]+)\/credential-fields$/.exec(normalizedPath);
   if (method === "GET" && platformFieldsMatch) {
     return { kind: "platform_credential_fields", platform: platformFieldsMatch[1] };
+  }
+
+  if (method === "POST" && normalizedPath === "/businesses") return { kind: "create_business" };
+
+  const sendVerificationMatch = /^\/businesses\/([^/]+)\/owner-verification\/send$/.exec(normalizedPath);
+  if (method === "POST" && sendVerificationMatch) {
+    return { kind: "send_owner_verification", businessId: sendVerificationMatch[1] };
+  }
+
+  const confirmVerificationMatch = /^\/businesses\/([^/]+)\/owner-verification\/confirm$/.exec(normalizedPath);
+  if (method === "POST" && confirmVerificationMatch) {
+    return { kind: "confirm_owner_verification", businessId: confirmVerificationMatch[1] };
   }
 
   return null;
