@@ -256,6 +256,7 @@ export interface Business {
   owner_verified_at: string | null;
   owner_verification_code: string | null;
   owner_verification_code_expires_at: string | null;
+  owner_verification_attempts: number | null;
   package_tier: PackageTier | null;
   /** Phase 8.2 boost policy fields (doc §18) — all null means "behave
    * exactly as today, always ask." Setting auto_boost_threshold_cents lets

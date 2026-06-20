@@ -1,9 +1,25 @@
-import { randomInt } from "node:crypto";
+import { randomInt, timingSafeEqual } from "node:crypto";
 import { supabase } from "./supabase.js";
 import { sendApprovalSms } from "../approval/sms.js";
 import type { Business } from "../types.js";
 
 const CODE_TTL_MS = 10 * 60 * 1000;
+
+/** Phase 15 security hardening: caps how many wrong codes confirmOwnerVerification
+ * will accept against a single sent code, so a 10-minute TTL window can't be
+ * brute-forced via unlimited HTTP calls (a ~900k-value code space is only safe
+ * if guessing is actually rate-limited). */
+const MAX_VERIFICATION_ATTEMPTS = 5;
+
+/** Constant-time string comparison so a valid code can't be inferred by
+ * timing how fast a wrong guess is rejected — matches agent-api/auth.ts's
+ * isAuthorized pattern. */
+function codesMatch(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) return false;
+  return timingSafeEqual(aBuf, bBuf);
+}
 
 /** Phase 6.4: owner phone verification gate — the weekly loop must not run
  * for a business until this is true on its profile. SMS is the only
@@ -26,7 +42,7 @@ export async function sendOwnerVerificationCode(business: Business): Promise<voi
 
   const { error } = await supabase
     .from("business")
-    .update({ owner_verification_code: code, owner_verification_code_expires_at: expiresAt })
+    .update({ owner_verification_code: code, owner_verification_code_expires_at: expiresAt, owner_verification_attempts: 0 })
     .eq("id", business.id);
   if (error) throw error;
 
@@ -41,8 +57,18 @@ export async function confirmOwnerVerification(businessId: string, code: string)
   if (error) throw error;
   const business = businessRow as Business;
 
-  if (!business.owner_verification_code || business.owner_verification_code !== code.trim()) return false;
+  if (!business.owner_verification_code) return false;
+  if ((business.owner_verification_attempts ?? 0) >= MAX_VERIFICATION_ATTEMPTS) return false;
   if (!business.owner_verification_code_expires_at || new Date(business.owner_verification_code_expires_at).getTime() < Date.now()) {
+    return false;
+  }
+
+  if (!codesMatch(business.owner_verification_code, code.trim())) {
+    const { error: attemptError } = await supabase
+      .from("business")
+      .update({ owner_verification_attempts: (business.owner_verification_attempts ?? 0) + 1 })
+      .eq("id", businessId);
+    if (attemptError) throw attemptError;
     return false;
   }
 
@@ -52,6 +78,7 @@ export async function confirmOwnerVerification(businessId: string, code: string)
       owner_verified_at: new Date().toISOString(),
       owner_verification_code: null,
       owner_verification_code_expires_at: null,
+      owner_verification_attempts: 0,
     })
     .eq("id", businessId);
   if (updateError) throw updateError;

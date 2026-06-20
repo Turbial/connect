@@ -16,6 +16,7 @@ import { sendApprovalWhatsapp, whatsappButtonToText } from "./approval/whatsapp.
 import { sendOwnerVerificationCode, confirmOwnerVerification } from "./lib/ownerVerification.js";
 import { classifyChatIntent, buildChatIntentReply } from "./chat/scoreCard.js";
 import { buildOperatorSnapshot } from "./lib/operatorSnapshot.js";
+import { verifyTwilioWebhook, verifyMetaWebhook, verifyReachWebhook, verifyBusinessRoute } from "./lib/webhookAuth.js";
 import type { Business, Platform } from "./types.js";
 
 /** Phase 7.1: dispatches a decision (already-resolved text, e.g. "yes"/"no"/
@@ -39,6 +40,11 @@ async function handleSmsWebhook(req: http.IncomingMessage, res: http.ServerRespo
   const params = new URLSearchParams(body);
   const from = params.get("From");
   const text = params.get("Body");
+
+  if (!verifyTwilioWebhook("/webhooks/sms", params, req.headers["x-twilio-signature"] as string | undefined)) {
+    res.writeHead(403).end();
+    return;
+  }
 
   if (!from || !text) {
     res.writeHead(400).end();
@@ -93,6 +99,11 @@ async function handleSmsWebhook(req: http.IncomingMessage, res: http.ServerRespo
 async function handleWhatsappWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
   let body = "";
   for await (const chunk of req) body += chunk;
+
+  if (!verifyMetaWebhook(body, req.headers["x-hub-signature-256"] as string | undefined)) {
+    res.writeHead(403).end();
+    return;
+  }
 
   let payload;
   try {
@@ -169,6 +180,11 @@ async function resolveBusinessFromChainStepPhone(phone: string): Promise<Busines
 }
 
 async function handleReachWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
+  if (!verifyReachWebhook(req.headers.authorization)) {
+    res.writeHead(401).end();
+    return;
+  }
+
   let body = "";
   for await (const chunk of req) body += chunk;
 
@@ -282,6 +298,11 @@ async function handleMissedCallWebhook(req: http.IncomingMessage, res: http.Serv
   const from = params.get("From");
   const to = params.get("To");
 
+  if (!verifyTwilioWebhook("/webhooks/missed-call", params, req.headers["x-twilio-signature"] as string | undefined)) {
+    res.writeHead(403).end();
+    return;
+  }
+
   if (!from || !to) {
     res.writeHead(400).end();
     return;
@@ -340,6 +361,16 @@ async function handleCustomerMessageReplyRoute(req: http.IncomingMessage, res: h
   res.writeHead(200).end();
 }
 
+/** Phase 15 security hardening: every business/organization-scoped route
+ * below exposes operator data and state-changing actions keyed only on a
+ * UUID in the path — a UUID is not a valid trust boundary once combined with
+ * those side effects, so each of these also requires the same bearer token
+ * the agent-facing API uses (CONNECT_AGENT_API_KEY), checked before the
+ * route's handler ever runs. */
+function isAuthorizedBusinessRoute(req: http.IncomingMessage): boolean {
+  return verifyBusinessRoute(req.headers.authorization);
+}
+
 /** Webhook receiver for inbound Twilio SMS replies and Reach review events. */
 export function startWebhookServer(port: number): ReturnType<typeof http.createServer> {
   const server = http.createServer(async (req, res) => {
@@ -368,36 +399,51 @@ export function startWebhookServer(port: number): ReturnType<typeof http.createS
       return;
     }
     const connectionsMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/connections$/);
+    const sendVerificationMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/owner-verification\/send$/);
+    const confirmVerificationMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/owner-verification\/confirm$/);
+    const visibilityScoreMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/visibility-score$/);
+    const operatorSnapshotMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/operator-snapshot$/);
+    const orgReportMatch = req.method === "GET" && req.url?.match(/^\/organizations\/([^/]+)\/report$/);
+    const customerMessageReplyMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/messages$/);
+
+    const isBusinessScopedRoute =
+      connectionsMatch ||
+      sendVerificationMatch ||
+      confirmVerificationMatch ||
+      visibilityScoreMatch ||
+      operatorSnapshotMatch ||
+      orgReportMatch ||
+      customerMessageReplyMatch;
+
+    if (isBusinessScopedRoute && !isAuthorizedBusinessRoute(req)) {
+      res.writeHead(401).end();
+      return;
+    }
+
     if (connectionsMatch) {
       await handleConnectionsRoute(req, res, connectionsMatch[1]);
       return;
     }
-    const sendVerificationMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/owner-verification\/send$/);
     if (sendVerificationMatch) {
       await handleSendOwnerVerificationRoute(req, res, sendVerificationMatch[1]);
       return;
     }
-    const confirmVerificationMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/owner-verification\/confirm$/);
     if (confirmVerificationMatch) {
       await handleConfirmOwnerVerificationRoute(req, res, confirmVerificationMatch[1]);
       return;
     }
-    const visibilityScoreMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/visibility-score$/);
     if (visibilityScoreMatch) {
       await handleVisibilityScoreRoute(req, res, visibilityScoreMatch[1]);
       return;
     }
-    const operatorSnapshotMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/operator-snapshot$/);
     if (operatorSnapshotMatch) {
       await handleOperatorSnapshotRoute(req, res, operatorSnapshotMatch[1]);
       return;
     }
-    const orgReportMatch = req.method === "GET" && req.url?.match(/^\/organizations\/([^/]+)\/report$/);
     if (orgReportMatch) {
       await handleOrgReportRoute(req, res, orgReportMatch[1]);
       return;
     }
-    const customerMessageReplyMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/messages$/);
     if (customerMessageReplyMatch) {
       await handleCustomerMessageReplyRoute(req, res, customerMessageReplyMatch[1]);
       return;

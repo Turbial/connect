@@ -777,3 +777,8 @@ create table if not exists post_metric_snapshot (
 );
 
 create index if not exists idx_post_metric_snapshot_post on post_metric_snapshot(post_id, captured_at);
+
+-- ── Phase 15 security hardening: caps brute-force attempts against a sent
+-- owner verification code (confirmOwnerVerification refuses once this hits
+-- MAX_VERIFICATION_ATTEMPTS), reset to 0 whenever a fresh code is sent ──────
+alter table business add column if not exists owner_verification_attempts integer not null default 0;
