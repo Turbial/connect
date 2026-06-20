@@ -196,6 +196,95 @@ el("flagTrendingBtn").addEventListener("click", async () => {
   }
 });
 
+el("runSeoAuditBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("run_seo_audit");
+    const issues = (output.issues || []).map((i) => `<li>${i}</li>`).join("");
+    el("seoAuditCard").innerHTML = `<div><strong>${output.score}</strong> / 100</div>${issues ? `<ul>${issues}</ul>` : ""}`;
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+el("addCompetitorBtn").addEventListener("click", async () => {
+  showError("");
+  const name = el("competitorName").value.trim();
+  if (!name) return;
+  try {
+    await callTool("add_competitor", { name, gbpPlaceId: el("competitorGbpPlaceId").value.trim() || undefined });
+    el("competitorsResult").textContent = `Added competitor "${name}".`;
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+el("captureCompetitorSnapshotsBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    await callTool("capture_competitor_snapshots");
+    el("competitorsResult").textContent = "Captured fresh competitor snapshots.";
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+el("trackRankBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const keyword = el("rankKeyword").value.trim() || undefined;
+    const { output } = await callTool("track_rank", { keyword });
+    el("rankResult").textContent = output.rank === null ? "Not found in results." : `Rank: #${output.rank}`;
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+el("captureSentimentTrendBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    await callTool("capture_sentiment_trend");
+    el("reputationResult").textContent = "Captured a fresh sentiment-trend snapshot.";
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+el("checkDuplicateListingsBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    await callTool("check_duplicate_listings");
+    el("reputationResult").textContent = "Checked for duplicate listings — see recent agent actions for results.";
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+el("syncListingInfoBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    await callTool("sync_listing_info");
+    el("syncListingResult").textContent = "Synced listing info to connected platforms.";
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+el("predictDraftScoreBtn").addEventListener("click", async () => {
+  showError("");
+  const contentItemId = el("draftContentItemId").value.trim();
+  if (!contentItemId) {
+    showError("Enter a content item ID first.");
+    return;
+  }
+  try {
+    const { output } = await callTool("predict_draft_score", { contentItemId });
+    el("draftScoreResult").innerHTML = `<strong>${output.score}</strong> / 100 — ${output.reason}`;
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
 el("lookupFieldsBtn").addEventListener("click", async () => {
   showError("");
   const platform = el("platformInput").value.trim();

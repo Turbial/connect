@@ -105,6 +105,55 @@
       </section>
 
       <section class="card">
+        <h2>SEO audit</h2>
+        <button id="runSeoAuditBtn">Run SEO audit</button>
+        <div id="seoAuditCard"></div>
+      </section>
+
+      <section class="card">
+        <h2>Competitors</h2>
+        <div class="row">
+          <input id="competitorName" type="text" placeholder="Competitor name" />
+          <input id="competitorGbpPlaceId" type="text" placeholder="GBP place id (optional)" />
+        </div>
+        <button id="addCompetitorBtn">Add competitor</button>
+        <button id="captureCompetitorSnapshotsBtn">Capture snapshots</button>
+        <div id="competitorsResult"></div>
+      </section>
+
+      <section class="card">
+        <h2>Local search rank</h2>
+        <div class="row">
+          <input id="rankKeyword" type="text" placeholder="Keyword (defaults to business name)" />
+        </div>
+        <button id="trackRankBtn">Track rank</button>
+        <div id="rankResult"></div>
+      </section>
+
+      <section class="card">
+        <h2>Reputation</h2>
+        <button id="captureSentimentTrendBtn">Capture sentiment trend</button>
+        <button id="checkDuplicateListingsBtn">Check duplicate listings</button>
+        <div id="reputationResult"></div>
+      </section>
+
+      <section class="card">
+        <h2>Listing sync</h2>
+        <p class="muted">Pushes the business's canonical name/address/phone out to connected platforms (GBP today).</p>
+        <button id="syncListingInfoBtn">Sync listing info</button>
+        <div id="syncListingResult"></div>
+      </section>
+
+      <section class="card">
+        <h2>Predict draft score</h2>
+        <div class="row">
+          <input id="draftContentItemId" type="text" placeholder="Content item ID" />
+        </div>
+        <button id="predictDraftScoreBtn">Predict score</button>
+        <div id="draftScoreResult"></div>
+      </section>
+
+      <section class="card">
         <h2>Platform credentials</h2>
         <div class="row">
           <input id="platformInput" type="text" placeholder="platform, e.g. facebook" />
