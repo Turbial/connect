@@ -80,10 +80,15 @@ gaps below.
 - Meta/Google Ads campaigns are launched in `PAUSED` status by design — nothing spends
   money until a human reviews and activates the campaign in-platform. Revisit once
   there's appetite for fully automatic activation.
-- No retry/backoff on external API calls yet.
-- Boost threshold (`VIEWS_THRESHOLD`/`ENGAGEMENT_THRESHOLD` in `trigger-engine/index.ts`)
-  and default boost budget (`DEFAULT_BUDGET_CENTS` in `approval/boost.ts`) are fixed
-  constants; no per-business configuration yet.
+- External post/insight calls already retry with backoff (`src/lib/retry.ts`'s `withRetry`,
+  applied in `src/distribution/index.ts` and `src/performance/index.ts`); a failure on one
+  platform/post/business is isolated and logged rather than aborting the rest of a cron run
+  (`src/jobs/weeklyBatch.ts`, `collectPerformance.ts`, `runServiceModules.ts` each wrap
+  per-business work in try/catch).
+- Boost threshold and default boost budget are per-business overridable via
+  `src/lib/orgSettings.ts`'s `resolveBusinessSetting` (falling back to the
+  `VIEWS_THRESHOLD`/`ENGAGEMENT_THRESHOLD`/`DEFAULT_BUDGET_CENTS` constants only when a
+  business hasn't set `boost_views_threshold`/`boost_engagement_threshold`/`boost_budget_cents`).
 - `business` rows (platform tokens, ad account ids, owner contact info) are assumed to
   be seeded manually; no onboarding UI exists.
 - TikTok's adapter (`tiktok.ts`) uses the Content Posting API's `PULL_FROM_URL` init

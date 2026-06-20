@@ -35,6 +35,8 @@ import { fetchQuoraInsights } from "../distribution/quora.js";
 import { fetchTrustpilotInsights } from "../distribution/trustpilot.js";
 import { fetchYandexInsights } from "../distribution/yandex.js";
 import { genericAdapters } from "../distribution/genericAdapter.js";
+import { withRetry } from "../lib/retry.js";
+import { logAgentAction } from "../lib/agentAction.js";
 import type { Business, Post } from "../types.js";
 
 async function fetchInsight(business: Business, post: Post, platformPostId: string) {
@@ -96,16 +98,34 @@ export async function collectPerformance(business: Business): Promise<void> {
   for (const post of (posts ?? []) as Post[]) {
     if (!post.platform_post_id) continue;
 
-    const insight = await fetchInsight(business, post, post.platform_post_id);
-    await supabase
-      .from("post")
-      .update({
-        views: insight.views,
-        clicks: insight.clicks,
-        calls: "calls" in insight ? insight.calls : 0,
-        engagement: "engagement" in insight ? insight.engagement : 0,
-        last_polled_at: new Date().toISOString(),
-      })
-      .eq("id", post.id);
+    // One platform's insights API being down shouldn't block polling every
+    // other post for this business (or, transitively, every later business
+    // in the cron run that calls this function in a loop).
+    try {
+      const insight = await withRetry(() => fetchInsight(business, post, post.platform_post_id!));
+      await supabase
+        .from("post")
+        .update({
+          views: insight.views,
+          clicks: insight.clicks,
+          calls: "calls" in insight ? insight.calls : 0,
+          engagement: "engagement" in insight ? insight.engagement : 0,
+          last_polled_at: new Date().toISOString(),
+        })
+        .eq("id", post.id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await logAgentAction({
+        businessId: business.id,
+        source: "weekly_job",
+        intent: "collect_performance",
+        tool: "fetch_insight",
+        input: { postId: post.id, platform: post.platform },
+        status: "failed",
+        riskLevel: "low",
+        approvalRequired: false,
+        error: message,
+      });
+    }
   }
 }

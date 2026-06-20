@@ -25,24 +25,28 @@ async function main(): Promise<void> {
   if (error) throw error;
 
   for (const business of (businesses ?? []) as Business[]) {
-    await runSeoAudit(business);
-    await captureCompetitorSnapshots(business);
-    await syncListingInfo(business);
-    await trackRank(business, business.name);
-    await captureSentimentTrend(business);
-    await checkDuplicateListings(business);
-    await runBusinessHoursConsistency(business);
-    await runSocialProofBadgeCheck(business);
-    await runStructuredDataCheck(business);
-    await runPageSpeedSignal(business);
-    await runBacklinkCountSnapshot(business);
-    await runLocalCitationCountSnapshot(business);
-    await runSocialFollowerCountSnapshot(business);
-    await runReviewResponseRateSignal(business);
-    await runContentFreshnessSignal(business);
-    await runDuplicateReviewFlagSignal(business);
-    await runImageAltCoverageSignal(business);
-    await runMobileFriendlinessSignal(business);
+    try {
+      await runSeoAudit(business);
+      await captureCompetitorSnapshots(business);
+      await syncListingInfo(business);
+      await trackRank(business, business.name);
+      await captureSentimentTrend(business);
+      await checkDuplicateListings(business);
+      await runBusinessHoursConsistency(business);
+      await runSocialProofBadgeCheck(business);
+      await runStructuredDataCheck(business);
+      await runPageSpeedSignal(business);
+      await runBacklinkCountSnapshot(business);
+      await runLocalCitationCountSnapshot(business);
+      await runSocialFollowerCountSnapshot(business);
+      await runReviewResponseRateSignal(business);
+      await runContentFreshnessSignal(business);
+      await runDuplicateReviewFlagSignal(business);
+      await runImageAltCoverageSignal(business);
+      await runMobileFriendlinessSignal(business);
+    } catch (err) {
+      console.error(`runServiceModules failed for business ${business.id}:`, err);
+    }
   }
 }
 

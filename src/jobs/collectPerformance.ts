@@ -10,9 +10,16 @@ async function main(): Promise<void> {
   if (error) throw error;
 
   for (const business of (businesses ?? []) as Business[]) {
-    await postVariantBIfDue(business);
-    await collectPerformance(business);
-    await evaluateBoostTriggers(business);
+    // One business throwing (e.g. a malformed row, an unexpected platform
+    // value) shouldn't stop performance collection/boost evaluation for
+    // every other business in this cron run.
+    try {
+      await postVariantBIfDue(business);
+      await collectPerformance(business);
+      await evaluateBoostTriggers(business);
+    } catch (err) {
+      console.error(`collectPerformance job failed for business ${business.id}:`, err);
+    }
   }
 }
 

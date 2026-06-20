@@ -6,6 +6,12 @@ import { getConnectionSummary } from "../lib/platformConnection.js";
 import { setPlatformCredentials } from "../lib/platformCredentials.js";
 import { queueWeeklyContent } from "../content-engine/index.js";
 import { evaluateBoostTriggers } from "../trigger-engine/index.js";
+import { runSeoAudit } from "../seo-audit/index.js";
+import { addCompetitor, captureCompetitorSnapshots } from "../competitor-monitor/index.js";
+import { trackRank } from "../rank-tracker/index.js";
+import { captureSentimentTrend } from "../sentiment-tracker/index.js";
+import { checkDuplicateListings } from "../duplicate-listing-check/index.js";
+import { syncListingInfo } from "../listings/index.js";
 import type { AgentActionRiskLevel, AgentActionSource, Business, Platform } from "../types.js";
 
 /** Phase 8.10: the doc's tool-calling intent router (§15) — discrete,
@@ -20,7 +26,14 @@ export type ToolName =
   | "queue_content"
   | "propose_boost"
   | "run_visibility_audit"
-  | "set_platform_credentials";
+  | "set_platform_credentials"
+  | "run_seo_audit"
+  | "add_competitor"
+  | "capture_competitor_snapshots"
+  | "track_rank"
+  | "capture_sentiment_trend"
+  | "check_duplicate_listings"
+  | "sync_listing_info";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -149,6 +162,75 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
       if (!platform) throw new Error('"platform" is required.');
       return { platform, wouldSetFields: Object.keys(values) };
     },
+  },
+  run_seo_audit: {
+    description: "Runs a local SEO/citation completeness audit against the business's own NAP record, scoring it 0-100 and flagging gaps.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: (b) => runSeoAudit(b),
+    preview: (b) => runSeoAudit(b),
+  },
+  add_competitor: {
+    description: 'Adds a named competitor to track for this business. Call with input: { "name": "Competitor Inc", "gbpPlaceId": "optional Google Place id" }.',
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b, input) => {
+      const name = input.name as string | undefined;
+      if (!name) throw new Error('"name" is required.');
+      return addCompetitor(b, name, input.gbpPlaceId as string | undefined);
+    },
+    preview: async (_b, input) => {
+      const name = input.name as string | undefined;
+      if (!name) throw new Error('"name" is required.');
+      return { wouldAddCompetitor: name };
+    },
+  },
+  capture_competitor_snapshots: {
+    description: "Captures a fresh rating/review-count snapshot for each tracked competitor via the Google Places API.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b) => {
+      await captureCompetitorSnapshots(b);
+      return { captured: true, businessId: b.id };
+    },
+    preview: async (b) => ({ wouldCapture: true, businessId: b.id }),
+  },
+  track_rank: {
+    description: 'Tracks the business\'s local search rank for a keyword. Call with input: { "keyword": "best pizza near me" } (defaults to the business name if omitted).',
+    riskLevel: "low",
+    approvalRequired: false,
+    run: (b, input) => trackRank(b, (input.keyword as string | undefined) ?? b.name),
+    preview: (b, input) => trackRank(b, (input.keyword as string | undefined) ?? b.name),
+  },
+  capture_sentiment_trend: {
+    description: "Captures a rolling 30-day avg-rating/review-count snapshot from stored reviews.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b) => {
+      await captureSentimentTrend(b);
+      return { captured: true, businessId: b.id };
+    },
+    preview: async (b) => ({ wouldCapture: true, businessId: b.id }),
+  },
+  check_duplicate_listings: {
+    description: "Flags potential duplicate/competing Google Business Profile listings for the business.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b) => {
+      await checkDuplicateListings(b);
+      return { checked: true, businessId: b.id };
+    },
+    preview: async (b) => ({ wouldCheck: true, businessId: b.id }),
+  },
+  sync_listing_info: {
+    description: "Syncs the business's canonical NAP info out to connected platforms' profiles (currently GBP only).",
+    riskLevel: "medium",
+    approvalRequired: false,
+    run: async (b) => {
+      await syncListingInfo(b);
+      return { synced: true, businessId: b.id };
+    },
+    preview: async (b) => ({ wouldSync: true, businessId: b.id }),
   },
 };
 

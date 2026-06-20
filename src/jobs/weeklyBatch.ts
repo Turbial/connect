@@ -39,7 +39,11 @@ async function main(): Promise<void> {
   if (error) throw error;
 
   for (const business of (businesses ?? []) as Business[]) {
-    await runForBusiness(business);
+    try {
+      await runForBusiness(business);
+    } catch (err) {
+      console.error(`weeklyBatch content queueing failed for business ${business.id}:`, err);
+    }
   }
 
   // Resolve any prior week's requests that timed out before this week's batch goes out.
@@ -47,10 +51,14 @@ async function main(): Promise<void> {
 
   for (const business of (businesses ?? []) as Business[]) {
     if (!isOwnerVerified(business)) continue;
-    if (hasFeature(business, "auto_posting")) {
-      await postApprovedContent(business);
+    try {
+      if (hasFeature(business, "auto_posting")) {
+        await postApprovedContent(business);
+      }
+      await sendWeeklyReport(business);
+    } catch (err) {
+      console.error(`weeklyBatch posting/report failed for business ${business.id}:`, err);
     }
-    await sendWeeklyReport(business);
   }
 
   // Surface pending EDIT requests so they're a visible queue, not a silent
