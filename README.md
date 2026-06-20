@@ -43,6 +43,9 @@ gaps below.
 | `src/jobs/collectPerformance.ts` | Cron entrypoint: poll insights for all businesses, then evaluate boost triggers. |
 | `src/jobs/runServiceModules.ts` | Cron entrypoint: runs the SEO audit, competitor snapshot capture, listing sync, rank tracking, sentiment trend capture, duplicate listing check, and the 12 Phase 12 service-signal modules for all businesses (`npm run services`). |
 | `src/index.ts` | HTTP server for Twilio's inbound SMS webhook (`/webhooks/sms`, disambiguating content vs. boost replies) and Reach's review webhook (`/webhooks/reach-review`). |
+| `src/tools` | Phase 8.10: the typed tool registry (`callTool`/`getToolCatalog`) every agent-facing surface below dispatches through — same dry-run/approval/audit-log behavior for every caller. |
+| `src/agent-api` | Phase 10: a minimal bearer-token-authed HTTP API (`GET /tools`, `POST /tools/:name`) exposing the tool registry to any agent able to make HTTP calls (`npm run agent-api`). |
+| `src/mcp` | Phase 12: an MCP stdio server (`npm run mcp`) exposing the same tool registry over the Model Context Protocol, so Claude Desktop/Code (or any other MCP client) can attach to Connect directly as a tool-using agent. |
 
 ## Setup
 1. Copy `.env.example` to `.env` and fill in Supabase, Twilio, DeepSeek, fal.ai, Meta,
@@ -54,6 +57,9 @@ gaps below.
 5. `npm run collect` to poll performance and evaluate boost triggers.
 6. `npm run services` to run the SEO audit, competitor snapshot capture, and listing sync.
 7. `npm run dev` to start the webhook server.
+8. `npm run agent-api` to start the agent-facing HTTP API (set `CONNECT_AGENT_API_KEY` first),
+   or `npm run mcp` to expose the same tools over MCP for Claude Desktop/Code or any other
+   MCP client — point its config at this command with the project's env vars set.
 
 ## Known gaps to resolve before production
 - Hashtag generation (`generateHashtags`) and translation (`translateCaption`) are each

@@ -13,13 +13,16 @@
     "connections": "tsx src/jobs/checkConnections.ts",
     "visibility-score": "tsx src/jobs/runVisibilityScore.ts",
     "agent-api": "tsx src/agent-api/server.ts",
+    "mcp": "tsx src/mcp/server.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@supabase/supabase-js": "^2.45.4",
     "dotenv": "^16.4.5",
-    "twilio": "^5.3.0"
+    "twilio": "^5.3.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
