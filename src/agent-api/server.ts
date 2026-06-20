@@ -2,6 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { isAuthorized, parseBearerToken } from "./auth.js";
 import { isKnownToolName, matchRoute } from "./router.js";
 import { callTool, getToolCatalog, type ToolName } from "../tools/registry.js";
+import { credentialFieldsFor } from "../lib/platformCredentials.js";
+import type { Platform } from "../types.js";
 
 const MAX_BODY_BYTES = 1_000_000;
 
@@ -60,6 +62,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
     return;
   }
 
+  if (route.kind === "platform_credential_fields") {
+    sendJson(res, 200, { platform: route.platform, fields: credentialFieldsFor(route.platform as Platform) });
+    return;
+  }
+
   // route.kind === "call_tool"
   if (!isKnownToolName(route.toolName)) {
     sendJson(res, 404, { error: `Unknown tool "${route.toolName}"` });
@@ -74,16 +81,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
     return;
   }
 
-  const businessId = body.businessId;
+  const { businessId, dryRun: dryRunRaw, ...input } = body;
   if (typeof businessId !== "string" || businessId.length === 0) {
     sendJson(res, 400, { error: "businessId is required" });
     return;
   }
 
-  const dryRun = body.dryRun === true;
+  const dryRun = dryRunRaw === true;
 
   try {
-    const result = await callTool(route.toolName as ToolName, businessId, { source: "external_agent", dryRun });
+    const result = await callTool(route.toolName as ToolName, businessId, { source: "external_agent", dryRun, input });
     const status = result.status === "failed" ? 502 : 200;
     sendJson(res, status, result);
   } catch (err) {

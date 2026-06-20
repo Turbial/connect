@@ -3,9 +3,10 @@ import { logAgentAction } from "../lib/agentAction.js";
 import { buildOperatorSnapshot, getPendingApprovals } from "../lib/operatorSnapshot.js";
 import { getLatestVisibilityScore, computeVisibilityScore } from "../visibility-score/index.js";
 import { getConnectionSummary } from "../lib/platformConnection.js";
+import { setPlatformCredentials } from "../lib/platformCredentials.js";
 import { queueWeeklyContent } from "../content-engine/index.js";
 import { evaluateBoostTriggers } from "../trigger-engine/index.js";
-import type { AgentActionRiskLevel, AgentActionSource, Business } from "../types.js";
+import type { AgentActionRiskLevel, AgentActionSource, Business, Platform } from "../types.js";
 
 /** Phase 8.10: the doc's tool-calling intent router (§15) — discrete,
  * typed-input/output functions wrapping existing tested logic, not a
@@ -18,7 +19,8 @@ export type ToolName =
   | "get_pending_approvals"
   | "queue_content"
   | "propose_boost"
-  | "run_visibility_audit";
+  | "run_visibility_audit"
+  | "set_platform_credentials";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -35,6 +37,10 @@ export interface ToolCallOptions {
   /** Runs the same validation/policy path as a real call and returns what it
    * would do, without performing the action's side effects. */
   dryRun?: boolean;
+  /** Tool-specific arguments beyond the business id (e.g. platform/values for
+   * set_platform_credentials) — never logged verbatim to agent_action, so a
+   * tool dealing with secrets is responsible for redacting its own output. */
+  input?: Record<string, unknown>;
 }
 
 export interface ToolCallResult<T = unknown> {
@@ -48,9 +54,9 @@ interface ToolDefinition {
   riskLevel: AgentActionRiskLevel;
   approvalRequired: boolean;
   /** Executes the tool's real action against `business`. */
-  run(business: Business): Promise<unknown>;
+  run(business: Business, input: Record<string, unknown>): Promise<unknown>;
   /** Side-effect-free preview of what `run` would do. */
-  preview(business: Business): Promise<unknown>;
+  preview(business: Business, input: Record<string, unknown>): Promise<unknown>;
 }
 
 export interface ToolCatalogEntry {
@@ -126,6 +132,24 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
     // returns the existing score instead of writing a new one.
     preview: (b) => getLatestVisibilityScore(b.id),
   },
+  set_platform_credentials: {
+    description:
+      'Stores a platform\'s credentials (access token / account id) for the business so it can actually post there. Call with input: { "platform": "facebook", "values": { "fb_page_access_token": "...", "fb_page_id": "..." } }. Never echoes a submitted value back.',
+    riskLevel: "high",
+    approvalRequired: false,
+    run: async (b, input) => {
+      const platform = input.platform as Platform | undefined;
+      const values = input.values as Record<string, string> | undefined;
+      if (!platform || !values) throw new Error('Both "platform" and "values" are required.');
+      return setPlatformCredentials(b.id, platform, values);
+    },
+    preview: async (_b, input) => {
+      const platform = input.platform as Platform | undefined;
+      const values = (input.values as Record<string, string> | undefined) ?? {};
+      if (!platform) throw new Error('"platform" is required.');
+      return { platform, wouldSetFields: Object.keys(values) };
+    },
+  },
 };
 
 /** Phase 10: the tool catalog an external agent (e.g. Claude, via the agent
@@ -171,10 +195,11 @@ export async function callTool(toolName: ToolName, businessId: string, options: 
   }
 
   const dryRun = options.dryRun ?? false;
+  const input = options.input ?? {};
 
   try {
     if (dryRun) {
-      const preview = await definition.preview(business);
+      const preview = await definition.preview(business, input);
       await logAgentAction({
         businessId,
         source: options.source,
@@ -189,7 +214,7 @@ export async function callTool(toolName: ToolName, businessId: string, options: 
       return { status: "dry_run", output: preview };
     }
 
-    const output = await definition.run(business);
+    const output = await definition.run(business, input);
     await logAgentAction({
       businessId,
       source: options.source,

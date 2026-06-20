@@ -25,11 +25,22 @@ describe("matchRoute", () => {
   it("returns null when the method doesn't match the route", () => {
     expect(matchRoute("GET", "/tools/queue_content")).toBeNull();
   });
+
+  it("matches platform credential-field discovery and extracts the platform", () => {
+    expect(matchRoute("GET", "/platforms/facebook/credential-fields")).toEqual({
+      kind: "platform_credential_fields",
+      platform: "facebook",
+    });
+  });
 });
 
 describe("isKnownToolName", () => {
   it("accepts a registered tool name", () => {
     expect(isKnownToolName("propose_boost")).toBe(true);
+  });
+
+  it("accepts set_platform_credentials", () => {
+    expect(isKnownToolName("set_platform_credentials")).toBe(true);
   });
 
   it("rejects an unregistered name", () => {
