@@ -12,6 +12,7 @@ const CREDENTIAL_FIELD_OVERRIDES: Partial<Record<Platform, string[]>> = {
   facebook: ["fb_page_access_token", "fb_page_id"],
   instagram: ["fb_page_access_token", "ig_business_id"],
   wechat: ["wechat_access_token", "wechat_official_account_id"],
+  whatsapp: ["whatsapp_access_token", "whatsapp_phone_number_id", "whatsapp_broadcast_recipient"],
 };
 
 /** The business-table column(s) that hold a given platform's credentials —

@@ -43,6 +43,7 @@ export interface Business {
   youtube_refresh_token: string | null;
   whatsapp_phone_number_id: string | null;
   whatsapp_access_token: string | null;
+  whatsapp_broadcast_recipient: string | null;
   reddit_subreddit: string | null;
   reddit_access_token: string | null;
   bluesky_handle: string | null;

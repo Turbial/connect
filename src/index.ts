@@ -57,10 +57,7 @@ async function handleSmsWebhook(req: http.IncomingMessage, res: http.ServerRespo
     .eq("owner_phone", from)
     .maybeSingle();
 
-  if (error) {
-    res.writeHead(404).end();
-    return;
-  }
+  if (error) throw error;
 
   // Phase 4.2: a reply from a configured chain step's phone (not the owner's)
   // resolves content approval for whichever business in that step's org
@@ -309,7 +306,8 @@ async function handleMissedCallWebhook(req: http.IncomingMessage, res: http.Serv
   }
 
   const { data: business, error } = await supabase.from("business").select("id").eq("phone", to).maybeSingle();
-  if (error || !business) {
+  if (error) throw error;
+  if (!business) {
     res.writeHead(404).end();
     return;
   }
@@ -374,6 +372,24 @@ function isAuthorizedBusinessRoute(req: http.IncomingMessage): boolean {
 /** Webhook receiver for inbound Twilio SMS replies and Reach review events. */
 export function startWebhookServer(port: number): ReturnType<typeof http.createServer> {
   const server = http.createServer(async (req, res) => {
+    try {
+      await routeWebhookRequest(req, res);
+    } catch (err) {
+      // Without this, any handler throwing (a Supabase outage, a malformed
+      // payload past JSON.parse, a missing field deref) leaves the request
+      // hanging forever — Twilio/Meta read that as a timeout and retry,
+      // piling up connections against a server that's already failing.
+      console.error("Webhook request failed:", err);
+      if (!res.headersSent) res.writeHead(500).end();
+    }
+  });
+
+  server.listen(port, () => console.log(`Distribution Layer listening on :${port}`));
+  return server;
+}
+
+async function routeWebhookRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  {
     if (req.method === "POST" && req.url === "/webhooks/sms") {
       await handleSmsWebhook(req, res);
       return;
@@ -446,10 +462,7 @@ export function startWebhookServer(port: number): ReturnType<typeof http.createS
       return;
     }
     res.writeHead(404).end();
-  });
-
-  server.listen(port, () => console.log(`Distribution Layer listening on :${port}`));
-  return server;
+  }
 }
 
 const isMain = process.argv[1] && /index\.(ts|js)$/.test(process.argv[1]);

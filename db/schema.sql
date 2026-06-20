@@ -782,3 +782,8 @@ create index if not exists idx_post_metric_snapshot_post on post_metric_snapshot
 -- owner verification code (confirmOwnerVerification refuses once this hits
 -- MAX_VERIFICATION_ATTEMPTS), reset to 0 whenever a fresh code is sent ──────
 alter table business add column if not exists owner_verification_attempts integer not null default 0;
+
+-- ── Platform hardening: WhatsApp Cloud API requires a `to` recipient on every
+-- send and has no broadcast/follower concept — this is the single recipient
+-- an operator configures until a real customer opt-in list exists ─────────
+alter table business add column if not exists whatsapp_broadcast_recipient text;

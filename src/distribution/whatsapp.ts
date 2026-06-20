@@ -17,6 +17,18 @@ export async function postToWhatsapp(business: Business, item: ContentItem): Pro
     throw new Error(`Business ${business.id} is not connected to WhatsApp`);
   }
 
+  // The Cloud API has no "broadcast to my followers" concept — every send
+  // requires a `to` recipient, and there is no opt-in customer-list table in
+  // this codebase yet to source one from. Failing loudly here (instead of
+  // sending a request Meta will reject anyway) avoids burning API quota and
+  // makes the real gap — recipient-list infrastructure doesn't exist —
+  // visible instead of surfacing as an opaque 400 from Meta.
+  if (!business.whatsapp_broadcast_recipient) {
+    throw new Error(
+      `Business ${business.id} has no WhatsApp broadcast recipient configured — organic WhatsApp distribution requires a customer opt-in list, which doesn't exist yet`,
+    );
+  }
+
   const res = await fetch(`${WHATSAPP_API_BASE}/${business.whatsapp_phone_number_id}/messages`, {
     method: "POST",
     headers: {
@@ -25,6 +37,7 @@ export async function postToWhatsapp(business: Business, item: ContentItem): Pro
     },
     body: JSON.stringify({
       messaging_product: "whatsapp",
+      to: business.whatsapp_broadcast_recipient,
       type: item.media_url ? "image" : "text",
       ...(item.media_url
         ? { image: { link: item.media_url, caption: item.caption } }
@@ -33,7 +46,8 @@ export async function postToWhatsapp(business: Business, item: ContentItem): Pro
   });
 
   if (!res.ok) {
-    throw new Error(`WhatsApp post failed for business ${business.id}: ${res.status}`);
+    const errorBody = await res.text().catch(() => "");
+    throw new Error(`WhatsApp post failed for business ${business.id}: ${res.status} ${errorBody}`);
   }
 
   const data = (await res.json()) as { messages?: { id: string }[] };

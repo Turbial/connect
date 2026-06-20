@@ -36,7 +36,8 @@ export async function postToFacebookPage(business: Business, item: ContentItem):
 
   const res = await fetch(endpoint, { method: "POST", body: params });
   if (!res.ok) {
-    throw new Error(`Facebook post failed for business ${business.id}: ${res.status}`);
+    const errorBody = await res.text().catch(() => "");
+    throw new Error(`Facebook post failed for business ${business.id}: ${res.status} ${errorBody}`);
   }
 
   const data = (await res.json()) as { post_id?: string; id: string };
@@ -52,7 +53,8 @@ async function waitForContainerReady(accessToken: string, containerId: string): 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const res = await fetch(`${GRAPH_BASE}/${containerId}?fields=status_code&access_token=${accessToken}`);
     if (!res.ok) {
-      throw new Error(`Instagram container status check failed: ${res.status}`);
+      const errorBody = await res.text().catch(() => "");
+      throw new Error(`Instagram container status check failed: ${res.status} ${errorBody}`);
     }
     const data = (await res.json()) as { status_code?: string };
     if (data.status_code === "FINISHED") return;
@@ -89,7 +91,8 @@ export async function postToInstagram(business: Business, item: ContentItem): Pr
     body: containerParams,
   });
   if (!containerRes.ok) {
-    throw new Error(`Instagram media container failed for business ${business.id}: ${containerRes.status}`);
+    const errorBody = await containerRes.text().catch(() => "");
+    throw new Error(`Instagram media container failed for business ${business.id}: ${containerRes.status} ${errorBody}`);
   }
   const container = (await containerRes.json()) as { id: string };
 
@@ -106,7 +109,8 @@ export async function postToInstagram(business: Business, item: ContentItem): Pr
     body: publishParams,
   });
   if (!publishRes.ok) {
-    throw new Error(`Instagram publish failed for business ${business.id}: ${publishRes.status}`);
+    const errorBody = await publishRes.text().catch(() => "");
+    throw new Error(`Instagram publish failed for business ${business.id}: ${publishRes.status} ${errorBody}`);
   }
   const published = (await publishRes.json()) as { id: string };
   return { platformPostId: published.id };
@@ -129,7 +133,8 @@ export async function fetchMetaInsights(business: Business, platformPostId: stri
     `${GRAPH_BASE}/${platformPostId}/insights?metric=post_impressions,post_clicks,post_engaged_users&access_token=${business.fb_page_access_token}`
   );
   if (!res.ok) {
-    throw new Error(`Meta insights fetch failed for ${platformPostId}: ${res.status}`);
+    const errorBody = await res.text().catch(() => "");
+    throw new Error(`Meta insights fetch failed for ${platformPostId}: ${res.status} ${errorBody}`);
   }
 
   const data = (await res.json()) as { data?: { name: string; values: { value: number }[] }[] };
