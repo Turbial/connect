@@ -7,6 +7,7 @@ import { hasFeature } from "../lib/packages.js";
 import { tryAutoBoost } from "../approval/boost.js";
 import { statusOf } from "../lib/platformStatus.js";
 import { logAgentAction } from "../lib/agentAction.js";
+import { flagTrendingContent } from "../content-analytics/index.js";
 import type { AdPlatform, Business, BoostTrigger, Organization, Post } from "../types.js";
 
 /** A post earns a boost prompt once it clears either threshold and has no existing boost_trigger. */
@@ -19,10 +20,14 @@ function pickAdPlatform(business: Business): AdPlatform | null {
   return null;
 }
 
-function meetsThreshold(business: Business, organization: Organization | null, post: Post): boolean {
+function meetsThreshold(business: Business, organization: Organization | null, post: Post, trendingPostIds: Set<string>): boolean {
   const viewsThreshold = resolveBusinessSetting(business, organization, "boost_views_threshold", VIEWS_THRESHOLD);
   const engagementThreshold = resolveBusinessSetting(business, organization, "boost_engagement_threshold", ENGAGEMENT_THRESHOLD);
-  return post.views >= viewsThreshold || post.engagement >= engagementThreshold;
+  // Phase 14.3: a post already trending well above the business's own
+  // recent average is an earlier, additive boost signal — it does not
+  // replace the fixed views/engagement floor above, which still triggers a
+  // boost on its own regardless of velocity.
+  return post.views >= viewsThreshold || post.engagement >= engagementThreshold || trendingPostIds.has(post.id);
 }
 
 /** Phase 8.1: cites the real measured engagement difference between a
@@ -74,12 +79,21 @@ export async function evaluateBoostTriggers(business: Business): Promise<void> {
   if (triggerError) throw triggerError;
   const triggeredPostIds = new Set((existingTriggers ?? []).map((t) => t.post_id));
 
+  // Best-effort: a trending-detection failure (e.g. no snapshots yet) should
+  // never block the existing fixed-threshold trigger path below.
+  let trendingPostIds = new Set<string>();
+  try {
+    trendingPostIds = new Set((await flagTrendingContent(business.id)).filter((p) => p.trending).map((p) => p.postId));
+  } catch {
+    trendingPostIds = new Set();
+  }
+
   // Only "a" variants are scanned for trigger eligibility — a "b" variant
   // (Phase 8.1) is a comparison data point for its sibling "a" post, not an
   // independent boost candidate of its own. Phase 8.2: a stub/sandbox
   // platform's synthetic metrics can never trigger or justify a boost.
   for (const post of allPosts.filter((p) => p.variant === "a" && statusOf(p.platform) === "verified")) {
-    if (triggeredPostIds.has(post.id) || !meetsThreshold(business, organization, post)) continue;
+    if (triggeredPostIds.has(post.id) || !meetsThreshold(business, organization, post, trendingPostIds)) continue;
 
     // Phase 8.1: where a sibling "b" post exists and has been measured (its
     // performance poll has run at least once), cite the real comparison

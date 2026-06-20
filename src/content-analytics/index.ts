@@ -295,6 +295,97 @@ export async function analyzeCaptionQualities(
   }
 }
 
+/** A post's growth rate (score per hour) between its two most recent
+ * `post_metric_snapshot` rows, and how that compares to the business's other
+ * recently-snapshotted posts — the basis for flagging something climbing
+ * fast while it's still climbing, rather than only after it's finished. */
+export interface TrendingPost {
+  postId: string;
+  contentItemId: string;
+  caption: string;
+  currentScore: number;
+  velocity: number;
+  trending: boolean;
+}
+
+/** Significant if a post's velocity is at least double the business's
+ * average velocity across its other recently-polled posts — same
+ * deliberately-blunt-threshold philosophy as `SIGNIFICANCE_THRESHOLD`,
+ * picked so a single early poll on a slow business doesn't get flagged. */
+const TRENDING_VELOCITY_MULTIPLE = 2;
+
+/** Phase 14.3: reads each post's score history (at least two
+ * `post_metric_snapshot` rows, populated by `collectPerformance`'s polling
+ * loop) and flags posts climbing meaningfully faster than the business's
+ * own recent average — the "still rising" signal 14.1's finished-totals
+ * ranking can't see. Posts with fewer than two snapshots are skipped; there
+ * is no velocity to compute yet. */
+export async function flagTrendingContent(businessId: string): Promise<TrendingPost[]> {
+  const { data: items, error: itemsError } = await supabase
+    .from("content_item")
+    .select("id, caption")
+    .eq("business_id", businessId);
+  if (itemsError) throw itemsError;
+  const captionByItemId = new Map((items ?? []).map((i) => [i.id, i.caption as string]));
+  const itemIds = [...captionByItemId.keys()];
+  if (itemIds.length === 0) return [];
+
+  const { data: posts, error: postsError } = await supabase
+    .from("post")
+    .select("id, content_item_id")
+    .in("content_item_id", itemIds);
+  if (postsError) throw postsError;
+  const postRows = (posts ?? []) as Pick<Post, "id" | "content_item_id">[];
+  if (postRows.length === 0) return [];
+
+  const { data: snapshots, error: snapshotError } = await supabase
+    .from("post_metric_snapshot")
+    .select("post_id, score, captured_at")
+    .in("post_id", postRows.map((p) => p.id))
+    .order("captured_at", { ascending: true });
+  if (snapshotError) throw snapshotError;
+
+  const snapshotsByPost = new Map<string, { score: number; captured_at: string }[]>();
+  for (const snapshot of (snapshots ?? []) as { post_id: string; score: number; captured_at: string }[]) {
+    const list = snapshotsByPost.get(snapshot.post_id) ?? [];
+    list.push(snapshot);
+    snapshotsByPost.set(snapshot.post_id, list);
+  }
+
+  const velocityByPost = new Map<string, number>();
+  for (const post of postRows) {
+    const history = snapshotsByPost.get(post.id);
+    if (!history || history.length < 2) continue;
+
+    const previous = history[history.length - 2];
+    const latest = history[history.length - 1];
+    const hoursElapsed = (new Date(latest.captured_at).getTime() - new Date(previous.captured_at).getTime()) / (1000 * 60 * 60);
+    if (hoursElapsed <= 0) continue;
+
+    velocityByPost.set(post.id, (latest.score - previous.score) / hoursElapsed);
+  }
+
+  if (velocityByPost.size === 0) return [];
+
+  const averageVelocity = [...velocityByPost.values()].reduce((sum, v) => sum + v, 0) / velocityByPost.size;
+
+  return postRows
+    .filter((post) => velocityByPost.has(post.id))
+    .map((post) => {
+      const velocity = velocityByPost.get(post.id)!;
+      const latest = snapshotsByPost.get(post.id)![snapshotsByPost.get(post.id)!.length - 1];
+      return {
+        postId: post.id,
+        contentItemId: post.content_item_id,
+        caption: captionByItemId.get(post.content_item_id) ?? "",
+        currentScore: latest.score,
+        velocity,
+        trending: averageVelocity > 0 && velocity >= averageVelocity * TRENDING_VELOCITY_MULTIPLE,
+      };
+    })
+    .sort((a, b) => b.velocity - a.velocity);
+}
+
 export interface ContentPerformanceAnalysis {
   topPerformers: ContentPerformanceEntry[];
   underPerformers: ContentPerformanceEntry[];

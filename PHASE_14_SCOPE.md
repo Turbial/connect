@@ -55,6 +55,19 @@ consider wiring it into `trigger-engine` as an *earlier* boost signal than
 the current fixed views/engagement threshold (additive, not a replacement
 — the existing threshold stays as the floor).
 
+**Shipped as:** a new `post_metric_snapshot` table (one row appended per
+poll, same pattern as `rank_snapshot`/`sentiment_trend`), populated by
+`collectPerformance` in `src/performance/index.ts`. `flagTrendingContent` in
+`src/content-analytics/index.ts` reads each post's two most recent
+snapshots, computes a score-per-hour velocity, and flags any post whose
+velocity is at least double the business's own average velocity across its
+other recently-polled posts. Tool: `flag_trending_content`. Dashboard card:
+"Trending content." `trigger-engine/evaluateBoostTriggers` now also treats
+a trending post as boost-eligible, in addition to (not instead of) the
+existing fixed views/engagement threshold; a trend-detection failure is
+caught and treated as "nothing trending" so it never blocks the existing
+fixed-threshold path.
+
 ## 14.4 — Predictive draft scoring
 
 **Why:** 14.1-14.3 explain the past. The highest-leverage next step is
@@ -99,6 +112,6 @@ project's no-heavy-dependencies convention).
 
 - [x] 14.1 Structural performance diffing
 - [x] 14.2 Qualitative caption analysis
-- [ ] 14.3 Trend/virality detection
+- [x] 14.3 Trend/virality detection
 - [ ] 14.4 Predictive draft scoring
 - [ ] 14.5 Feed insights back into content generation

@@ -174,6 +174,28 @@ el("analyzePerformanceBtn").addEventListener("click", async () => {
   }
 });
 
+function renderTrendingContent(posts) {
+  const trending = (posts || []).filter((p) => p.trending);
+  if (trending.length === 0) {
+    el("trendingCard").innerHTML = `<p class="muted">Nothing trending above your recent average right now.</p>`;
+    return;
+  }
+  const rows = trending
+    .map((p) => `<li>"${p.caption.slice(0, 60)}" — score climbing at ${p.velocity.toFixed(1)}/hr (current score ${Math.round(p.currentScore)}).</li>`)
+    .join("");
+  el("trendingCard").innerHTML = `<ul>${rows}</ul>`;
+}
+
+el("flagTrendingBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("flag_trending_content");
+    renderTrendingContent(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
 el("lookupFieldsBtn").addEventListener("click", async () => {
   showError("");
   const platform = el("platformInput").value.trim();

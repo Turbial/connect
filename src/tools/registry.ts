@@ -12,7 +12,7 @@ import { trackRank } from "../rank-tracker/index.js";
 import { captureSentimentTrend } from "../sentiment-tracker/index.js";
 import { checkDuplicateListings } from "../duplicate-listing-check/index.js";
 import { syncListingInfo } from "../listings/index.js";
-import { analyzeContentPerformance } from "../content-analytics/index.js";
+import { analyzeContentPerformance, flagTrendingContent } from "../content-analytics/index.js";
 import type { AgentActionRiskLevel, AgentActionSource, Business, Platform } from "../types.js";
 
 /** Phase 8.10: the doc's tool-calling intent router (§15) — discrete,
@@ -35,7 +35,8 @@ export type ToolName =
   | "capture_sentiment_trend"
   | "check_duplicate_listings"
   | "sync_listing_info"
-  | "analyze_content_performance";
+  | "analyze_content_performance"
+  | "flag_trending_content";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -241,6 +242,14 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
     approvalRequired: false,
     run: (b) => analyzeContentPerformance(b),
     preview: (b) => analyzeContentPerformance(b),
+  },
+  flag_trending_content: {
+    description:
+      "Flags posted content whose engagement score is climbing meaningfully faster than the business's recent average, based on poll-to-poll score history — surfaces what's trending up while it's still rising, not just after it's finished.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: (b) => flagTrendingContent(b.id),
+    preview: (b) => flagTrendingContent(b.id),
   },
 };
 

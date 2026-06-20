@@ -37,6 +37,7 @@ import { fetchYandexInsights } from "../distribution/yandex.js";
 import { genericAdapters } from "../distribution/genericAdapter.js";
 import { withRetry } from "../lib/retry.js";
 import { logAgentAction } from "../lib/agentAction.js";
+import { computeEngagementScore } from "../content-analytics/index.js";
 import type { Business, Post } from "../types.js";
 
 async function fetchInsight(business: Business, post: Post, platformPostId: string) {
@@ -103,16 +104,31 @@ export async function collectPerformance(business: Business): Promise<void> {
     // in the cron run that calls this function in a loop).
     try {
       const insight = await withRetry(() => fetchInsight(business, post, post.platform_post_id!));
+      const calls = "calls" in insight ? insight.calls : 0;
+      const engagement = "engagement" in insight ? insight.engagement : 0;
       await supabase
         .from("post")
         .update({
           views: insight.views,
           clicks: insight.clicks,
-          calls: "calls" in insight ? insight.calls : 0,
-          engagement: "engagement" in insight ? insight.engagement : 0,
+          calls,
+          engagement,
           last_polled_at: new Date().toISOString(),
         })
         .eq("id", post.id);
+
+      // Phase 14.3: append a score snapshot rather than only overwriting the
+      // post row in place, so trend/velocity detection has a time series to
+      // work from instead of just the latest poll's totals.
+      const score = computeEngagementScore({
+        views: insight.views,
+        clicks: insight.clicks,
+        calls,
+        engagement,
+        impressions: post.impressions,
+        shares: post.shares,
+      });
+      await supabase.from("post_metric_snapshot").insert({ post_id: post.id, score });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await logAgentAction({

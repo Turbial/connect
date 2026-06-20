@@ -765,3 +765,15 @@ create index if not exists idx_agent_action_business on agent_action(business_id
 
 -- ── Phase 9.3: repeated negative-review complaint theme detection ───────────
 alter table review add column if not exists complaint_theme text;
+
+-- ── Phase 14.3: post engagement-score history, for trend/velocity detection
+-- (collectPerformance appends one row per poll instead of overwriting in
+-- place, same snapshot-table pattern as rank_snapshot/sentiment_trend) ──────
+create table if not exists post_metric_snapshot (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references post(id) on delete cascade,
+  score numeric not null,
+  captured_at timestamptz not null default now()
+);
+
+create index if not exists idx_post_metric_snapshot_post on post_metric_snapshot(post_id, captured_at);
