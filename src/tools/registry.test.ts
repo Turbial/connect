@@ -14,6 +14,7 @@ describe("getToolCatalog", () => {
     expect(names).toContain("capture_sentiment_trend");
     expect(names).toContain("check_duplicate_listings");
     expect(names).toContain("sync_listing_info");
+    expect(names).toContain("analyze_content_performance");
 
     // Implementation details (run/preview functions) must never leak into the catalog.
     for (const entry of catalog) {

@@ -12,6 +12,7 @@ import { trackRank } from "../rank-tracker/index.js";
 import { captureSentimentTrend } from "../sentiment-tracker/index.js";
 import { checkDuplicateListings } from "../duplicate-listing-check/index.js";
 import { syncListingInfo } from "../listings/index.js";
+import { analyzeContentPerformance } from "../content-analytics/index.js";
 import type { AgentActionRiskLevel, AgentActionSource, Business, Platform } from "../types.js";
 
 /** Phase 8.10: the doc's tool-calling intent router (§15) — discrete,
@@ -33,7 +34,8 @@ export type ToolName =
   | "track_rank"
   | "capture_sentiment_trend"
   | "check_duplicate_listings"
-  | "sync_listing_info";
+  | "sync_listing_info"
+  | "analyze_content_performance";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -231,6 +233,14 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
       return { synced: true, businessId: b.id };
     },
     preview: async (b) => ({ wouldSync: true, businessId: b.id }),
+  },
+  analyze_content_performance: {
+    description:
+      "Ranks the business's posted content by an engagement score, compares the top and bottom performers across media type, surface, platform, caption length, posting time, hashtag/emoji use, and caption variant, and returns plain-language guidance on what to focus on next.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: (b) => analyzeContentPerformance(b),
+    preview: (b) => analyzeContentPerformance(b),
   },
 };
 

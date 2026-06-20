@@ -152,6 +152,28 @@ el("queueContentBtn").addEventListener("click", async () => {
   }
 });
 
+function renderPerformanceAnalysis(analysis) {
+  const insightRows = (analysis.insights || [])
+    .filter((i) => i.significant)
+    .map((i) => `<li>${i.summary}</li>`)
+    .join("");
+  el("performanceCard").innerHTML = `
+    <p>${analysis.recommendation}</p>
+    ${insightRows ? `<ul>${insightRows}</ul>` : ""}
+    <p class="muted">${analysis.topPerformers.length} top performer(s), ${analysis.underPerformers.length} underperformer(s) compared.</p>
+  `;
+}
+
+el("analyzePerformanceBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("analyze_content_performance");
+    renderPerformanceAnalysis(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
 el("lookupFieldsBtn").addEventListener("click", async () => {
   showError("");
   const platform = el("platformInput").value.trim();
