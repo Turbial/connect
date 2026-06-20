@@ -82,6 +82,16 @@ the approval SMS/email/dashboard — not a hard gate, just visible signal,
 consistent with the codebase's "advisory, owner decides" pattern everywhere
 else (boost approval, edit-rewrite proposals).
 
+**Shipped as:** `predictDraftScore(business, draftItem)` in
+`src/content-analytics/index.ts`, reusing `diffAttributes`'s significant
+structural insights (excluding `posting_time`, which an unposted draft has
+no value for yet) as the scoring weights — score is the percentage of
+applicable significant attributes the draft matches. Tool:
+`predict_draft_score`. Wired into `src/approval/index.ts`'s weekly approval
+message: each queued item gets a "Predicted fit: N/100 — reason" line,
+best-effort (a lookup failure for one item just omits that item's line,
+never blocks the approval send).
+
 ## 14.5 — Feed insights back into content generation
 
 **Why:** closes the loop — once 14.1/14.2 reliably identify "video +
@@ -113,5 +123,5 @@ project's no-heavy-dependencies convention).
 - [x] 14.1 Structural performance diffing
 - [x] 14.2 Qualitative caption analysis
 - [x] 14.3 Trend/virality detection
-- [ ] 14.4 Predictive draft scoring
+- [x] 14.4 Predictive draft scoring
 - [ ] 14.5 Feed insights back into content generation

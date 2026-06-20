@@ -4,10 +4,29 @@ import { sendApprovalEmail } from "./email.js";
 import { sendApprovalMessage } from "./channel.js";
 import { callDeepSeekPrompt } from "../content-engine/generate.js";
 import { getOrganizationForBusiness, orgDisplayName, resolveBusinessSetting } from "../lib/orgSettings.js";
+import { predictDraftScore } from "../content-analytics/index.js";
 import type { ApprovalChainStep, Business, ContentItem, Organization } from "../types.js";
 
-function buildMessage(business: Business, items: ContentItem[], displayName: string): string {
-  const lines = items.map((item, i) => `${i + 1}. "${item.caption.slice(0, 100)}"`);
+/** Phase 14.4: a one-line predicted-fit score per draft, advisory only —
+ * never blocks or reorders the approval message. Best-effort: a business
+ * with no posting history yet (or any other lookup failure) just omits the
+ * line for that item rather than failing the whole approval send. */
+async function draftScoreLine(business: Business, item: ContentItem): Promise<string | null> {
+  try {
+    const { score, reason } = await predictDraftScore(business, item);
+    return `Predicted fit: ${score}/100 — ${reason}`;
+  } catch {
+    return null;
+  }
+}
+
+async function buildMessage(business: Business, items: ContentItem[], displayName: string): Promise<string> {
+  const lines = await Promise.all(
+    items.map(async (item, i) => {
+      const scoreLine = await draftScoreLine(business, item);
+      return [`${i + 1}. "${item.caption.slice(0, 100)}"`, scoreLine ? `   ${scoreLine}` : null].filter(Boolean).join("\n");
+    })
+  );
   return [
     `Your weekly ${displayName} posts are ready for ${business.name}:`,
     ...lines,
@@ -54,7 +73,7 @@ export async function requestApproval(business: Business, items: ContentItem[]):
   if (organization?.content_paused) return;
 
   const displayName = orgDisplayName(organization);
-  const message = buildMessage(business, items, displayName);
+  const message = await buildMessage(business, items, displayName);
 
   const channel = business.owner_preferred_channel === "whatsapp" ? "whatsapp" : business.owner_phone ? "sms" : "email";
   await sendApprovalMessage(business, `Your ${displayName} posts are ready`, message);
@@ -119,7 +138,7 @@ async function advanceChain(
   }
 
   const { data: items } = await supabase.from("content_item").select("caption").in("id", queuedItemIds);
-  const message = buildMessage(
+  const message = await buildMessage(
     business,
     (items ?? []).map((i) => ({ caption: i.caption }) as ContentItem),
     orgDisplayName(organization)

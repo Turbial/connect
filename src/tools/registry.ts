@@ -12,8 +12,8 @@ import { trackRank } from "../rank-tracker/index.js";
 import { captureSentimentTrend } from "../sentiment-tracker/index.js";
 import { checkDuplicateListings } from "../duplicate-listing-check/index.js";
 import { syncListingInfo } from "../listings/index.js";
-import { analyzeContentPerformance, flagTrendingContent } from "../content-analytics/index.js";
-import type { AgentActionRiskLevel, AgentActionSource, Business, Platform } from "../types.js";
+import { analyzeContentPerformance, flagTrendingContent, predictDraftScore } from "../content-analytics/index.js";
+import type { AgentActionRiskLevel, AgentActionSource, Business, ContentItem, Platform } from "../types.js";
 
 /** Phase 8.10: the doc's tool-calling intent router (§15) — discrete,
  * typed-input/output functions wrapping existing tested logic, not a
@@ -36,7 +36,8 @@ export type ToolName =
   | "check_duplicate_listings"
   | "sync_listing_info"
   | "analyze_content_performance"
-  | "flag_trending_content";
+  | "flag_trending_content"
+  | "predict_draft_score";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -86,6 +87,19 @@ async function fetchBusiness(businessId: string): Promise<Business | null> {
   const { data, error } = await supabase.from("business").select("*").eq("id", businessId).maybeSingle();
   if (error) throw error;
   return (data as Business) ?? null;
+}
+
+async function fetchContentItem(businessId: string, contentItemId: string | undefined): Promise<ContentItem> {
+  if (!contentItemId) throw new Error('"contentItemId" is required.');
+  const { data, error } = await supabase
+    .from("content_item")
+    .select("*")
+    .eq("id", contentItemId)
+    .eq("business_id", businessId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error(`No content item found for id "${contentItemId}" on this business.`);
+  return data as ContentItem;
 }
 
 const TOOLS: Record<ToolName, ToolDefinition> = {
@@ -250,6 +264,20 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
     approvalRequired: false,
     run: (b) => flagTrendingContent(b.id),
     preview: (b) => flagTrendingContent(b.id),
+  },
+  predict_draft_score: {
+    description:
+      'Scores a queued draft (0-100, with a one-line reason) against the structural attributes that have actually driven this business\'s top-performing posts — advisory only, the owner still decides. Call with input: { "contentItemId": "..." }.',
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b, input) => {
+      const draftItem = await fetchContentItem(b.id, input.contentItemId as string | undefined);
+      return predictDraftScore(b, draftItem);
+    },
+    preview: async (b, input) => {
+      const draftItem = await fetchContentItem(b.id, input.contentItemId as string | undefined);
+      return predictDraftScore(b, draftItem);
+    },
   },
 };
 

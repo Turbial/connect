@@ -177,20 +177,31 @@ function compareAttribute(
   };
 }
 
+/** Every structural attribute Connect can observe about a post, shared
+ * between `diffAttributes` (what separated top from bottom performers) and
+ * `predictDraftScore` (does an unposted draft match the winning side) so
+ * the two can never silently drift out of sync on what "media_type" or
+ * "has_hashtags" actually means. `postedAt`-derived checks are excluded
+ * here since an unposted draft has no `postedAt` yet — `diffAttributes`
+ * adds `posting_time` on top of this shared list. */
+const STRUCTURAL_CHECKS: [string, (entry: ContentPerformanceEntry) => string, (value: string) => string][] = [
+  ["media_type", (e) => e.mediaType, (v) => `${v} media`],
+  ["surface", (e) => e.surface, (v) => `${v} surface`],
+  ["platform", (e) => e.platform, (v) => `the ${v} platform`],
+  ["variant", (e) => e.variant, (v) => `caption variant ${v.toUpperCase()}`],
+  ["caption_length", (e) => captionLengthBucket(e.caption), (v) => `${v} captions`],
+  ["has_hashtags", (e) => String(e.caption.includes("#")), (v) => (v === "true" ? "using hashtags" : "not using hashtags")],
+  ["has_emoji", (e) => String(EMOJI_PATTERN.test(e.caption)), (v) => (v === "true" ? "using emoji" : "not using emoji")],
+];
+
 /** Compares a top-performing group against an underperforming group across
  * every attribute Connect can observe about a post, so a creator (or an
  * agent acting on their behalf) can see which levers actually moved the
  * needle rather than guessing. */
 export function diffAttributes(top: ContentPerformanceEntry[], bottom: ContentPerformanceEntry[]): PerformanceInsight[] {
   const checks: [string, (entry: ContentPerformanceEntry) => string, (value: string) => string][] = [
-    ["media_type", (e) => e.mediaType, (v) => `${v} media`],
-    ["surface", (e) => e.surface, (v) => `${v} surface`],
-    ["platform", (e) => e.platform, (v) => `the ${v} platform`],
-    ["variant", (e) => e.variant, (v) => `caption variant ${v.toUpperCase()}`],
-    ["caption_length", (e) => captionLengthBucket(e.caption), (v) => `${v} captions`],
+    ...STRUCTURAL_CHECKS,
     ["posting_time", (e) => hourOfDayBucket(e.postedAt), (v) => `posting in the ${v}`],
-    ["has_hashtags", (e) => String(e.caption.includes("#")), (v) => (v === "true" ? "using hashtags" : "not using hashtags")],
-    ["has_emoji", (e) => String(EMOJI_PATTERN.test(e.caption)), (v) => (v === "true" ? "using emoji" : "not using emoji")],
   ];
 
   return checks
@@ -421,4 +432,87 @@ export async function analyzeContentPerformance(business: Business): Promise<Con
     insights,
     recommendation: buildRecommendation(insights, top),
   };
+}
+
+export interface DraftScorePrediction {
+  score: number;
+  reason: string;
+}
+
+/** A draft has no `Post` yet, so this builds just enough of a
+ * `ContentPerformanceEntry` to run the same structural predicates that
+ * `diffAttributes` already validated against this business's real history
+ * — `platform` is the draft's first targeted platform (the attribute that
+ * mattered when it was a finished post), and `postedAt`/metrics are
+ * meaningless for an unposted draft and left at zero/null. */
+function draftToEntry(item: ContentItem): ContentPerformanceEntry {
+  return {
+    contentItemId: item.id,
+    postId: "",
+    platform: item.platforms[0],
+    variant: "a",
+    mediaType: item.media_type,
+    surface: item.surface,
+    caption: item.caption,
+    postedAt: null,
+    views: 0,
+    clicks: 0,
+    calls: 0,
+    engagement: 0,
+    impressions: 0,
+    shares: 0,
+    score: 0,
+  };
+}
+
+/** Phase 14.4: scores a queued draft against the structural attributes
+ * 14.1 already found significant for this business's real posting
+ * history, before the draft goes out for owner approval — advisory only,
+ * consistent with every other approval flow in this codebase ("owner
+ * decides", never a hard gate). Reuses `diffAttributes`'s significant
+ * insights directly as the scoring weights rather than a separate model,
+ * so the two can never disagree about what "worked" for this business. */
+export async function predictDraftScore(business: Business, draftItem: ContentItem): Promise<DraftScorePrediction> {
+  const ranked = await rankContentPerformance(business.id);
+  const { top, bottom } = splitTopAndBottom(ranked);
+  const significant = diffAttributes(top, bottom).filter(
+    (insight) => insight.significant && insight.attribute !== "posting_time"
+  );
+
+  if (significant.length === 0) {
+    return {
+      score: 50,
+      reason: "Not enough posting history yet to score this draft against — defaulting to a neutral score.",
+    };
+  }
+
+  const draftEntry = draftToEntry(draftItem);
+  const matched: string[] = [];
+  const missed: string[] = [];
+
+  for (const insight of significant) {
+    const check = STRUCTURAL_CHECKS.find(([attribute]) => attribute === insight.attribute);
+    if (!check) continue;
+    const [, predicate] = check;
+    if (predicate(draftEntry) === insight.topValue) matched.push(insight.attribute);
+    else missed.push(insight.attribute);
+  }
+
+  const applicable = matched.length + missed.length;
+  if (applicable === 0) {
+    return {
+      score: 50,
+      reason: "Not enough posting history yet to score this draft against — defaulting to a neutral score.",
+    };
+  }
+
+  const score = Math.round((matched.length / applicable) * 100);
+  const reason =
+    matched.length === 0
+      ? `This draft doesn't match any of the attributes (${missed.join(", ")}) that have driven your top performers.`
+      : missed.length === 0
+        ? `This draft matches every attribute (${matched.join(", ")}) that has driven your top performers.`
+        : `Matches ${matched.join(", ")}; doesn't match ${missed.join(", ")} — all attributes that have driven your top performers.`;
+
+  return { score, reason };
 }
