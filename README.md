@@ -46,6 +46,7 @@ gaps below.
 | `src/tools` | Phase 8.10: the typed tool registry (`callTool`/`getToolCatalog`) every agent-facing surface below dispatches through — same dry-run/approval/audit-log behavior for every caller. |
 | `src/agent-api` | Phase 10: a minimal bearer-token-authed HTTP API (`GET /tools`, `POST /tools/:name`) exposing the tool registry to any agent able to make HTTP calls (`npm run agent-api`). |
 | `src/mcp` | Phase 12: an MCP stdio server (`npm run mcp`) exposing the same tool registry over the Model Context Protocol, so Claude Desktop/Code (or any other MCP client) can attach to Connect directly as a tool-using agent. |
+| `src/agent-api/public` | Phase 13: a minimal static operator dashboard (snapshot/score/connections/approvals/boosts/reviews/recent actions, plus actions to queue content, run a visibility audit, evaluate boost triggers, and set platform credentials), served by the agent-api server at `/` and calling its own `/tools/:name` endpoints with an API key entered in the page. |
 
 ## Setup
 1. Copy `.env.example` to `.env` and fill in Supabase, Twilio, DeepSeek, fal.ai, Meta,
@@ -57,9 +58,11 @@ gaps below.
 5. `npm run collect` to poll performance and evaluate boost triggers.
 6. `npm run services` to run the SEO audit, competitor snapshot capture, and listing sync.
 7. `npm run dev` to start the webhook server.
-8. `npm run agent-api` to start the agent-facing HTTP API (set `CONNECT_AGENT_API_KEY` first),
-   or `npm run mcp` to expose the same tools over MCP for Claude Desktop/Code or any other
-   MCP client — point its config at this command with the project's env vars set.
+8. `npm run agent-api` to start the agent-facing HTTP API (set `CONNECT_AGENT_API_KEY` first)
+   and serve the operator dashboard at `http://localhost:8787/` (enter the same API key and a
+   business id in the page), or `npm run mcp` to expose the same tools over MCP for Claude
+   Desktop/Code or any other MCP client — point its config at this command with the project's
+   env vars set.
 
 ## Known gaps to resolve before production
 - Hashtag generation (`generateHashtags`) and translation (`translateCaption`) are each

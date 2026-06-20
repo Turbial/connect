@@ -60,7 +60,7 @@ export function buildMcpServer(): McpServer {
   return server;
 }
 
-const isMain = process.argv[1] && process.argv[1].endsWith("server.ts");
+const isMain = process.argv[1] && /server\.(ts|js)$/.test(process.argv[1]);
 if (isMain) {
   const server = buildMcpServer();
   const transport = new StdioServerTransport();

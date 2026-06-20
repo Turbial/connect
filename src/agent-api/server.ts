@@ -1,9 +1,26 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { isAuthorized, parseBearerToken } from "./auth.js";
 import { isKnownToolName, matchRoute } from "./router.js";
+import { contentTypeFor, staticFileFor } from "./staticFiles.js";
 import { callTool, getToolCatalog, type ToolName } from "../tools/registry.js";
 import { credentialFieldsFor } from "../lib/platformCredentials.js";
 import type { Platform } from "../types.js";
+
+const PUBLIC_DIR = fileURLToPath(new URL("./public", import.meta.url));
+
+/** Serves the operator dashboard's static assets — unauthenticated, since the
+ * dashboard itself holds no data; every API call it makes still requires the
+ * bearer token entered into its own login field. */
+async function serveStaticFile(res: ServerResponse, fileName: string): Promise<void> {
+  try {
+    const contents = await readFile(`${PUBLIC_DIR}/${fileName}`);
+    res.writeHead(200, { "Content-Type": contentTypeFor(fileName) }).end(contents);
+  } catch {
+    res.writeHead(404).end();
+  }
+}
 
 const MAX_BODY_BYTES = 1_000_000;
 
@@ -39,6 +56,15 @@ async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknow
 export async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const method = req.method ?? "GET";
   const path = req.url ?? "/";
+
+  if (method === "GET") {
+    const staticFile = staticFileFor(path);
+    if (staticFile) {
+      await serveStaticFile(res, staticFile);
+      return;
+    }
+  }
+
   const route = matchRoute(method, path);
 
   if (!route) {
@@ -115,7 +141,7 @@ export function startAgentApiServer(port: number): ReturnType<typeof createServe
   return server;
 }
 
-const isMain = process.argv[1] && process.argv[1].endsWith("server.ts");
+const isMain = process.argv[1] && /server\.(ts|js)$/.test(process.argv[1]);
 if (isMain) {
   const port = Number(process.env.AGENT_API_PORT ?? 8787);
   startAgentApiServer(port);

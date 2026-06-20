@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Connect — Operator Dashboard</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Connect</h1>
+    <div class="auth-bar">
+      <input id="apiKey" type="password" placeholder="Agent API key" />
+      <input id="businessId" type="text" placeholder="Business ID" />
+      <button id="loadBtn">Load</button>
+      <span id="authStatus"></span>
+    </div>
+  </header>
+
+  <main id="app" hidden>
+    <section id="error" class="error" hidden></section>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Visibility score</h2>
+        <div id="scoreCard">—</div>
+        <button id="runAuditBtn">Run fresh audit</button>
+      </section>
+
+      <section class="card">
+        <h2>Connections</h2>
+        <div id="connectionsCard">—</div>
+      </section>
+
+      <section class="card">
+        <h2>Pending approvals</h2>
+        <div id="approvalsCard">—</div>
+      </section>
+
+      <section class="card">
+        <h2>Pending boosts</h2>
+        <div id="boostsCard">—</div>
+        <button id="proposeBoostBtn">Evaluate boost triggers</button>
+      </section>
+
+      <section class="card">
+        <h2>Unresolved reviews</h2>
+        <div id="reviewsCard">—</div>
+      </section>
+
+      <section class="card">
+        <h2>Recent agent actions</h2>
+        <div id="actionsCard">—</div>
+      </section>
+
+      <section class="card">
+        <h2>Content</h2>
+        <button id="queueContentBtn">Queue this week's content</button>
+        <div id="queueResult"></div>
+      </section>
+
+      <section class="card">
+        <h2>Platform credentials</h2>
+        <div class="row">
+          <input id="platformInput" type="text" placeholder="platform, e.g. facebook" />
+          <button id="lookupFieldsBtn">Lookup fields</button>
+        </div>
+        <div id="credentialFields"></div>
+        <button id="saveCredentialsBtn" hidden>Save credentials</button>
+        <div id="credentialsResult"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

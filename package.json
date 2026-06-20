@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && mkdir -p dist/agent-api/public && cp -r src/agent-api/public/. dist/agent-api/public/",
     "dev": "tsx src/index.ts",
     "weekly": "tsx src/jobs/weeklyBatch.ts",
     "collect": "tsx src/jobs/collectPerformance.ts",
