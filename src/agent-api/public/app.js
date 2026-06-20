@@ -232,6 +232,15 @@ function showOnboardingError(message) {
   box.hidden = !message;
 }
 
+async function apiFetch(path, { method = "GET", apiKey, body } = {}) {
+  const headers = { Authorization: `Bearer ${apiKey}` };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const res = await fetch(path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+  const responseBody = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(responseBody?.error || `Request failed (${res.status})`);
+  return responseBody;
+}
+
 el("createBusinessBtn").addEventListener("click", async () => {
   showOnboardingError("");
   const name = el("newBusinessName").value.trim();
@@ -245,20 +254,18 @@ el("createBusinessBtn").addEventListener("click", async () => {
     return;
   }
   try {
-    const res = await fetch("/businesses", {
+    const body = await apiFetch("/businesses", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
+      apiKey,
+      body: {
         name,
         location: el("newBusinessLocation").value.trim() || undefined,
         phone: el("newBusinessPhone").value.trim() || undefined,
         ownerPhone: el("newBusinessOwnerPhone").value.trim() || undefined,
         ownerEmail: el("newBusinessOwnerEmail").value.trim() || undefined,
         ownerMobile: el("newBusinessOwnerMobile").value.trim() || undefined,
-      }),
+      },
     });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body?.error || `Request failed (${res.status})`);
 
     state.apiKey = apiKey;
     state.businessId = body.business.id;
@@ -281,12 +288,7 @@ el("sendVerificationBtn").addEventListener("click", async () => {
     return;
   }
   try {
-    const res = await fetch(`/businesses/${businessId}/owner-verification/send`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body?.error || `Request failed (${res.status})`);
+    await apiFetch(`/businesses/${businessId}/owner-verification/send`, { method: "POST", apiKey });
     el("verificationResult").textContent = "Code sent — check the owner's phone.";
   } catch (err) {
     showOnboardingError(err.message);
@@ -303,13 +305,11 @@ el("confirmVerificationBtn").addEventListener("click", async () => {
     return;
   }
   try {
-    const res = await fetch(`/businesses/${businessId}/owner-verification/confirm`, {
+    const body = await apiFetch(`/businesses/${businessId}/owner-verification/confirm`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ code }),
+      apiKey,
+      body: { code },
     });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body?.error || `Request failed (${res.status})`);
     el("verificationResult").textContent = body.verified ? "Verified." : "Incorrect or expired code.";
   } catch (err) {
     showOnboardingError(err.message);

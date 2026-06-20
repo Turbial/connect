@@ -1,6 +1,7 @@
-import { randomInt, timingSafeEqual } from "node:crypto";
+import { randomInt } from "node:crypto";
 import { supabase } from "./supabase.js";
 import { sendApprovalSms } from "../approval/sms.js";
+import { isAuthorized } from "../agent-api/auth.js";
 import type { Business } from "../types.js";
 
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -10,16 +11,6 @@ const CODE_TTL_MS = 10 * 60 * 1000;
  * brute-forced via unlimited HTTP calls (a ~900k-value code space is only safe
  * if guessing is actually rate-limited). */
 const MAX_VERIFICATION_ATTEMPTS = 5;
-
-/** Constant-time string comparison so a valid code can't be inferred by
- * timing how fast a wrong guess is rejected — matches agent-api/auth.ts's
- * isAuthorized pattern. */
-function codesMatch(a: string, b: string): boolean {
-  const aBuf = Buffer.from(a);
-  const bBuf = Buffer.from(b);
-  if (aBuf.length !== bBuf.length) return false;
-  return timingSafeEqual(aBuf, bBuf);
-}
 
 /** Phase 6.4: owner phone verification gate — the weekly loop must not run
  * for a business until this is true on its profile. SMS is the only
@@ -53,9 +44,16 @@ export async function sendOwnerVerificationCode(business: Business): Promise<voi
  * for a wrong or expired code, since a mistyped code is an expected user
  * error, not a system failure. */
 export async function confirmOwnerVerification(businessId: string, code: string): Promise<boolean> {
-  const { data: businessRow, error } = await supabase.from("business").select("*").eq("id", businessId).single();
+  const { data: businessRow, error } = await supabase
+    .from("business")
+    .select("owner_verification_code, owner_verification_code_expires_at, owner_verification_attempts")
+    .eq("id", businessId)
+    .single();
   if (error) throw error;
-  const business = businessRow as Business;
+  const business = businessRow as Pick<
+    Business,
+    "owner_verification_code" | "owner_verification_code_expires_at" | "owner_verification_attempts"
+  >;
 
   if (!business.owner_verification_code) return false;
   if ((business.owner_verification_attempts ?? 0) >= MAX_VERIFICATION_ATTEMPTS) return false;
@@ -63,7 +61,7 @@ export async function confirmOwnerVerification(businessId: string, code: string)
     return false;
   }
 
-  if (!codesMatch(business.owner_verification_code, code.trim())) {
+  if (!isAuthorized(code.trim(), business.owner_verification_code)) {
     const { error: attemptError } = await supabase
       .from("business")
       .update({ owner_verification_attempts: (business.owner_verification_attempts ?? 0) + 1 })

@@ -398,6 +398,17 @@ export function startWebhookServer(port: number): ReturnType<typeof http.createS
       await handlePlatformStatusRoute(req, res);
       return;
     }
+    // Every route under these two prefixes is business/organization-scoped
+    // (see isAuthorizedBusinessRoute's docstring above) — gating on the
+    // prefix, rather than enumerating each route, means a route added here
+    // later can't ship unauthenticated by accident.
+    const isBusinessScopedRoute = req.url?.startsWith("/businesses/") || req.url?.startsWith("/organizations/");
+
+    if (isBusinessScopedRoute && !isAuthorizedBusinessRoute(req)) {
+      res.writeHead(401).end();
+      return;
+    }
+
     const connectionsMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/connections$/);
     const sendVerificationMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/owner-verification\/send$/);
     const confirmVerificationMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/owner-verification\/confirm$/);
@@ -405,20 +416,6 @@ export function startWebhookServer(port: number): ReturnType<typeof http.createS
     const operatorSnapshotMatch = req.method === "GET" && req.url?.match(/^\/businesses\/([^/]+)\/operator-snapshot$/);
     const orgReportMatch = req.method === "GET" && req.url?.match(/^\/organizations\/([^/]+)\/report$/);
     const customerMessageReplyMatch = req.method === "POST" && req.url?.match(/^\/businesses\/([^/]+)\/messages$/);
-
-    const isBusinessScopedRoute =
-      connectionsMatch ||
-      sendVerificationMatch ||
-      confirmVerificationMatch ||
-      visibilityScoreMatch ||
-      operatorSnapshotMatch ||
-      orgReportMatch ||
-      customerMessageReplyMatch;
-
-    if (isBusinessScopedRoute && !isAuthorizedBusinessRoute(req)) {
-      res.writeHead(401).end();
-      return;
-    }
 
     if (connectionsMatch) {
       await handleConnectionsRoute(req, res, connectionsMatch[1]);
