@@ -65,6 +65,13 @@ gaps below.
    Desktop/Code or any other MCP client — point its config at this command with the project's
    env vars set.
 
+## Roadmap
+
+`PHASE_14_SCOPE.md` breaks the content-analytics work (`src/content-analytics`)
+into trackable sub-phases — structural diffing (shipped), qualitative caption
+analysis, trend/virality detection, predictive draft scoring, and feeding
+insights back into content generation.
+
 ## Known gaps to resolve before production
 - Hashtag generation (`generateHashtags`) and translation (`translateCaption`) are each
   a separate DeepSeek call per content item, on top of the base caption call — this
