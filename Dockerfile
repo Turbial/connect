@@ -1,11 +1,11 @@
-FROM node:20-slim AS base
+FROM node:22-slim AS base
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev=false
 COPY . .
 RUN npm run build
 
-FROM node:20-slim
+FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json* ./

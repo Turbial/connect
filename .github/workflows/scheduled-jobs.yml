@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: "20", cache: "npm" }
+        with: { node-version: "22", cache: "npm" }
       - run: npm ci
       - run: npm run weekly
         env: &job-env
@@ -40,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: "20", cache: "npm" }
+        with: { node-version: "22", cache: "npm" }
       - run: npm ci
       - run: npm run collect
         env: *job-env
@@ -51,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: "20", cache: "npm" }
+        with: { node-version: "22", cache: "npm" }
       - run: npm ci
       - run: npm run services
         env:
@@ -64,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: "20", cache: "npm" }
+        with: { node-version: "22", cache: "npm" }
       - run: npm ci
       - run: npm run connections
         env: *job-env
@@ -75,7 +75,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: "20", cache: "npm" }
+        with: { node-version: "22", cache: "npm" }
       - run: npm ci
       - run: npm run visibility-score
         env: *job-env
