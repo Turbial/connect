@@ -16,7 +16,7 @@ posting time, hashtag/emoji use, A/B variant), flags which differences are
 significant (≥25pp gap). Tool: `analyze_content_performance`. Dashboard
 card: "Content performance."
 
-## 14.2 — Qualitative caption analysis (tone, hook, CTA)
+## 14.2 — Qualitative caption analysis (tone, hook, CTA) ✅ shipped
 
 **Why next:** 14.1 only sees *structure* (length, hashtags) — it can't tell
 you the top performer's first line asked a question while the bottom
@@ -33,6 +33,12 @@ structural version still gets it without an API key.
 
 **Out of scope for 14.2:** no auto-rewrite of future captions based on this
 yet — that's 14.5.
+
+**Shipped as:** `analyzeCaptionQualities` in `src/content-analytics/index.ts`,
+folded into `analyzeContentPerformance`'s `insights` array (attribute
+`caption_quality`). Best-effort: no `DEEPSEEK_API_KEY`, a failed request, or
+unparseable output all degrade to zero qualitative insights rather than
+failing the tool call — 14.1's structural insights are never blocked on it.
 
 ## 14.3 — Trend/virality detection
 
@@ -92,7 +98,7 @@ project's no-heavy-dependencies convention).
 ## Tracking
 
 - [x] 14.1 Structural performance diffing
-- [ ] 14.2 Qualitative caption analysis
+- [x] 14.2 Qualitative caption analysis
 - [ ] 14.3 Trend/virality detection
 - [ ] 14.4 Predictive draft scoring
 - [ ] 14.5 Feed insights back into content generation

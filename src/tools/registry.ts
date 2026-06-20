@@ -236,7 +236,7 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
   },
   analyze_content_performance: {
     description:
-      "Ranks the business's posted content by an engagement score, compares the top and bottom performers across media type, surface, platform, caption length, posting time, hashtag/emoji use, and caption variant, and returns plain-language guidance on what to focus on next.",
+      "Ranks the business's posted content by an engagement score, compares the top and bottom performers across media type, surface, platform, caption length, posting time, hashtag/emoji use, and caption variant, adds AI-identified qualitative caption patterns (hook style, tone, CTA presence) when DEEPSEEK_API_KEY is set, and returns plain-language guidance on what to focus on next.",
     riskLevel: "low",
     approvalRequired: false,
     run: (b) => analyzeContentPerformance(b),

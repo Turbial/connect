@@ -198,6 +198,103 @@ export function diffAttributes(top: ContentPerformanceEntry[], bottom: ContentPe
     .filter((insight): insight is PerformanceInsight => insight !== null);
 }
 
+const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
+
+/** Same single-DeepSeek-call pattern as `content-engine/capabilities.ts` and
+ * `ads/creative.ts`, reimplemented locally rather than imported — this
+ * module's qualitative analysis is conceptually standalone from content
+ * generation, same isolation rationale as `ads/creative.ts`'s. Returns null
+ * (never throws) when no key is configured, so the free structural diff in
+ * 14.1 keeps working without DeepSeek. */
+async function callDeepSeek(prompt: string): Promise<string | null> {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) return null;
+
+  const res = await fetch(DEEPSEEK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ model: "deepseek-chat", messages: [{ role: "user", content: prompt }] }),
+  });
+  if (!res.ok) throw new Error(`DeepSeek request failed: ${res.status}`);
+
+  const data = (await res.json()) as { choices: { message: { content: string } }[] };
+  return data.choices[0].message.content.trim();
+}
+
+interface QualitativePattern {
+  pattern: string;
+  explanation: string;
+}
+
+/** Strips a markdown code fence if DeepSeek wraps its JSON in one despite
+ * the prompt asking for raw JSON — cheaper than a second round-trip asking
+ * it to reformat. */
+function extractJsonArray(raw: string): string {
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  return fenced ? fenced[1] : raw;
+}
+
+function isQualitativePattern(value: unknown): value is QualitativePattern {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as QualitativePattern).pattern === "string" &&
+    typeof (value as QualitativePattern).explanation === "string"
+  );
+}
+
+/** Phase 14.2: structural diffing (media type, length, hashtags...) can't
+ * see *how* a caption is written — whether the top performers open with a
+ * question, lead with urgency, or end on a clear CTA verb. One DeepSeek
+ * call, given the actual top/bottom captions, surfaces that the same way a
+ * human reading both lists side by side would. Best-effort: any failure
+ * (no API key, a flaky request, unparseable output) degrades to no
+ * qualitative insights rather than failing the whole analysis — the
+ * structural insights from 14.1 are never blocked on this. */
+export async function analyzeCaptionQualities(
+  top: ContentPerformanceEntry[],
+  bottom: ContentPerformanceEntry[]
+): Promise<PerformanceInsight[]> {
+  const topCaptions = top.map((e) => e.caption).filter(Boolean);
+  const bottomCaptions = bottom.map((e) => e.caption).filter(Boolean);
+  if (topCaptions.length === 0 || bottomCaptions.length === 0) return [];
+
+  const prompt = [
+    "Compare these two groups of social media captions from the same business.",
+    "",
+    "TOP PERFORMERS:",
+    ...topCaptions.map((c, i) => `${i + 1}. ${c}`),
+    "",
+    "UNDERPERFORMERS:",
+    ...bottomCaptions.map((c, i) => `${i + 1}. ${c}`),
+    "",
+    'Identify up to 3 qualitative patterns (hook style, tone, presence of a call-to-action, etc — NOT caption length or hashtag/emoji count, those are measured separately) that distinguish the top group from the underperforming group.',
+    'Respond with ONLY a JSON array, each item shaped { "pattern": "short label", "explanation": "one sentence" }. If there is no clear qualitative pattern, respond with [].',
+  ].join("\n");
+
+  try {
+    const raw = await callDeepSeek(prompt);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(extractJsonArray(raw));
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter(isQualitativePattern)
+      .slice(0, 3)
+      .map((item) => ({
+        attribute: "caption_quality",
+        topValue: item.pattern,
+        topShare: 1,
+        bottomShare: 0,
+        significant: true,
+        summary: `${item.pattern}: ${item.explanation}`,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 export interface ContentPerformanceAnalysis {
   topPerformers: ContentPerformanceEntry[];
   underPerformers: ContentPerformanceEntry[];
@@ -224,7 +321,9 @@ function buildRecommendation(insights: PerformanceInsight[], topPerformers: Cont
 export async function analyzeContentPerformance(business: Business): Promise<ContentPerformanceAnalysis> {
   const ranked = await rankContentPerformance(business.id);
   const { top, bottom } = splitTopAndBottom(ranked);
-  const insights = diffAttributes(top, bottom);
+  const structuralInsights = diffAttributes(top, bottom);
+  const qualitativeInsights = await analyzeCaptionQualities(top, bottom);
+  const insights = [...structuralInsights, ...qualitativeInsights];
   return {
     topPerformers: top,
     underPerformers: bottom,

@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { computeEngagementScore, diffAttributes, splitTopAndBottom, type ContentPerformanceEntry } from "./index.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  analyzeCaptionQualities,
+  computeEngagementScore,
+  diffAttributes,
+  splitTopAndBottom,
+  type ContentPerformanceEntry,
+} from "./index.js";
 
 function entry(overrides: Partial<ContentPerformanceEntry>): ContentPerformanceEntry {
   return {
@@ -97,5 +103,102 @@ describe("diffAttributes", () => {
 
   it("returns an empty array when there are no top performers", () => {
     expect(diffAttributes([], [entry({})])).toEqual([]);
+  });
+});
+
+describe("analyzeCaptionQualities", () => {
+  const originalKey = process.env.DEEPSEEK_API_KEY;
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    process.env.DEEPSEEK_API_KEY = originalKey;
+  });
+
+  it("returns no insights when no DeepSeek key is configured", async () => {
+    delete process.env.DEEPSEEK_API_KEY;
+    const result = await analyzeCaptionQualities([entry({})], [entry({})]);
+    expect(result).toEqual([]);
+  });
+
+  it("returns no insights when either group has no usable captions", async () => {
+    process.env.DEEPSEEK_API_KEY = "test-key";
+    const result = await analyzeCaptionQualities([entry({ caption: "" })], [entry({})]);
+    expect(result).toEqual([]);
+  });
+
+  it("maps a successful DeepSeek response into PerformanceInsight-shaped entries", async () => {
+    process.env.DEEPSEEK_API_KEY = "test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify([
+                  { pattern: "Question-style hooks", explanation: "Top performers open with a question." },
+                ]),
+              },
+            },
+          ],
+        }),
+      })
+    );
+
+    const result = await analyzeCaptionQualities(
+      [entry({ caption: "Ever wonder why our pizza sells out by noon?" })],
+      [entry({ caption: "We have pizza." })]
+    );
+
+    expect(result).toEqual([
+      {
+        attribute: "caption_quality",
+        topValue: "Question-style hooks",
+        topShare: 1,
+        bottomShare: 0,
+        significant: true,
+        summary: "Question-style hooks: Top performers open with a question.",
+      },
+    ]);
+  });
+
+  it("handles a response wrapped in a markdown code fence", async () => {
+    process.env.DEEPSEEK_API_KEY = "test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: "```json\n[{\"pattern\": \"Urgency\", \"explanation\": \"Limited-time framing.\"}]\n```" } }],
+        }),
+      })
+    );
+
+    const result = await analyzeCaptionQualities([entry({ caption: "Last chance today!" })], [entry({ caption: "Open now." })]);
+    expect(result).toHaveLength(1);
+    expect(result[0].topValue).toBe("Urgency");
+  });
+
+  it("degrades to no insights instead of throwing when DeepSeek errors", async () => {
+    process.env.DEEPSEEK_API_KEY = "test-key";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+    const result = await analyzeCaptionQualities([entry({ caption: "A" })], [entry({ caption: "B" })]);
+    expect(result).toEqual([]);
+  });
+
+  it("degrades to no insights instead of throwing on unparseable output", async () => {
+    process.env.DEEPSEEK_API_KEY = "test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "not json at all" } }] }),
+      })
+    );
+
+    const result = await analyzeCaptionQualities([entry({ caption: "A" })], [entry({ caption: "B" })]);
+    expect(result).toEqual([]);
   });
 });
