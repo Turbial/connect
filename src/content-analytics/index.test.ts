@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   analyzeCaptionQualities,
+  buildPostLink,
   computeEngagementScore,
   diffAttributes,
   splitTopAndBottom,
@@ -39,6 +40,20 @@ describe("computeEngagementScore", () => {
     expect(computeEngagementScore({ views: 10, clicks: 1, calls: 1, engagement: 1, impressions: 10, shares: 1 })).toBe(
       10 * 1 + 10 * 0.5 + 1 * 3 + 1 * 4 + 1 * 6 + 1 * 8
     );
+  });
+});
+
+describe("buildPostLink", () => {
+  it("builds a real watch link for a youtube video id", () => {
+    expect(buildPostLink("youtube", "abc123")).toBe("https://www.youtube.com/watch?v=abc123");
+  });
+
+  it("builds a real permalink for a facebook post id", () => {
+    expect(buildPostLink("facebook", "page_post")).toBe("https://www.facebook.com/page_post");
+  });
+
+  it("returns null for platforms with no deterministic url mapping", () => {
+    expect(buildPostLink("instagram", "17912345")).toBeNull();
   });
 });
 

@@ -13,7 +13,7 @@ import { trackRank } from "../rank-tracker/index.js";
 import { captureSentimentTrend } from "../sentiment-tracker/index.js";
 import { checkDuplicateListings } from "../duplicate-listing-check/index.js";
 import { syncListingInfo } from "../listings/index.js";
-import { analyzeContentPerformance, flagTrendingContent, predictDraftScore, getContentCalendar, getPlatformBreakdown } from "../content-analytics/index.js";
+import { analyzeContentPerformance, flagTrendingContent, predictDraftScore, getContentCalendar, getPlatformBreakdown, getPublishedPostStatus } from "../content-analytics/index.js";
 import type { AgentActionRiskLevel, AgentActionSource, Business, ContentItem, Platform } from "../types.js";
 
 /** Phase 8.10: the doc's tool-calling intent router (§15) — discrete,
@@ -43,7 +43,8 @@ export type ToolName =
   | "get_platform_breakdown"
   | "get_visibility_score_history"
   | "get_tracked_competitors"
-  | "get_revenue_by_platform";
+  | "get_revenue_by_platform"
+  | "get_post_status";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -150,6 +151,13 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
     approvalRequired: false,
     run: (b) => getPlatformBreakdown(b.id),
     preview: (b) => getPlatformBreakdown(b.id),
+  },
+  get_post_status: {
+    description: "Per-platform outcome of every post dispatch for this business's posted content — real platform post id/link on success, or the actual error on failure.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: (b) => getPublishedPostStatus(b.id),
+    preview: (b) => getPublishedPostStatus(b.id),
   },
   get_visibility_score_history: {
     description: "The business's Local Visibility Score over time (oldest first), for charting trend rather than just the latest point.",

@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase.js";
-import type { Business, ContentItem, MediaType, Platform, Post, Surface } from "../types.js";
+import type { Business, ContentItem, DistributionFailure, MediaType, Platform, Post, Surface } from "../types.js";
 
 /** A single posted item's metrics flattened together with the content
  * attributes that might explain those metrics, so the rest of this module
@@ -109,6 +109,75 @@ export async function getContentCalendar(businessId: string): Promise<ContentCal
     status: item.status,
     createdAt: item.created_at,
   }));
+}
+
+export interface PublishedPostStatusEntry {
+  contentItemId: string;
+  caption: string;
+  platform: Platform;
+  status: "posted" | "failed";
+  platformPostId: string | null;
+  postedAt: string | null;
+  error: string | null;
+  /** Only set for platforms whose post id deterministically maps to a real,
+   * working URL (youtube, facebook) — others show the raw id rather than a
+   * guessed link that might 404. */
+  link: string | null;
+}
+
+export function buildPostLink(platform: Platform, platformPostId: string): string | null {
+  if (platform === "youtube") return `https://www.youtube.com/watch?v=${platformPostId}`;
+  if (platform === "facebook") return `https://www.facebook.com/${platformPostId}`;
+  return null;
+}
+
+/** Per-platform outcome of every dispatch attempt for this business's posted
+ * content — successes from `post` and failures from `distribution_failure`,
+ * merged so the dashboard can show exactly what went out where (or why it
+ * didn't), not just which content items exist. */
+export async function getPublishedPostStatus(businessId: string): Promise<PublishedPostStatusEntry[]> {
+  const { data: items, error: itemsError } = await supabase
+    .from("content_item")
+    .select("*")
+    .eq("business_id", businessId)
+    .eq("status", "posted");
+  if (itemsError) throw itemsError;
+  const typedItems = (items ?? []) as ContentItem[];
+  if (typedItems.length === 0) return [];
+
+  const itemIds = typedItems.map((i) => i.id);
+  const captionById = new Map(typedItems.map((i) => [i.id, i.caption]));
+
+  const [{ data: posts, error: postsError }, { data: failures, error: failuresError }] = await Promise.all([
+    supabase.from("post").select("*").in("content_item_id", itemIds).eq("variant", "a"),
+    supabase.from("distribution_failure").select("*").in("content_item_id", itemIds),
+  ]);
+  if (postsError) throw postsError;
+  if (failuresError) throw failuresError;
+
+  const posted: PublishedPostStatusEntry[] = ((posts ?? []) as Post[]).map((post) => ({
+    contentItemId: post.content_item_id,
+    caption: captionById.get(post.content_item_id) ?? "",
+    platform: post.platform,
+    status: "posted",
+    platformPostId: post.platform_post_id,
+    postedAt: post.posted_at,
+    error: null,
+    link: post.platform_post_id ? buildPostLink(post.platform, post.platform_post_id) : null,
+  }));
+
+  const failed: PublishedPostStatusEntry[] = ((failures ?? []) as DistributionFailure[]).map((failure) => ({
+    contentItemId: failure.content_item_id,
+    caption: captionById.get(failure.content_item_id) ?? "",
+    platform: failure.platform,
+    status: "failed",
+    platformPostId: null,
+    postedAt: null,
+    error: failure.error,
+    link: null,
+  }));
+
+  return [...posted, ...failed].sort((a, b) => (b.postedAt ?? "").localeCompare(a.postedAt ?? ""));
 }
 
 export interface PlatformBreakdownEntry {

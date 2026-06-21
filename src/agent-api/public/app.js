@@ -10,6 +10,7 @@ const state = {
 };
 
 const el = (id) => document.getElementById(id);
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 el("apiKey").value = state.apiKey;
 el("businessId").value = state.businessId;
@@ -404,6 +405,33 @@ el("loadRevenueBtn").addEventListener("click", async () => {
   try {
     const { output } = await callTool("get_revenue_by_platform");
     renderRevenueByPlatform(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+function renderPostStatus(entries) {
+  if (!entries || entries.length === 0) return el("postStatusCard").textContent = "Nothing posted yet.";
+  const rows = entries
+    .map((e) => {
+      const statusCell =
+        e.status === "posted"
+          ? e.link
+            ? `<a href="${escapeHtml(e.link)}" target="_blank" rel="noopener noreferrer">posted</a>`
+            : `posted (${escapeHtml(e.platformPostId ?? "")})`
+          : `<span class="error-text">failed: ${escapeHtml(e.error ?? "")}</span>`;
+      return `<tr><td>${escapeHtml(e.platform)}</td><td>${statusCell}</td><td>${escapeHtml(e.caption.slice(0, 60))}</td><td>${escapeHtml(e.postedAt ?? "")}</td></tr>`;
+    })
+    .join("");
+  el("postStatusCard").innerHTML =
+    `<table><tr><th>Platform</th><th>Status</th><th>Caption</th><th>Posted at</th></tr>${rows}</table>`;
+}
+
+el("loadPostStatusBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("get_post_status");
+    renderPostStatus(output);
   } catch (err) {
     showError(err.message);
   }

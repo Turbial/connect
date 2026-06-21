@@ -95,6 +95,10 @@ main {
   margin-bottom: 1rem;
 }
 
+.error-text {
+  color: #ffb4b4;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
