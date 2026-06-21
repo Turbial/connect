@@ -8,6 +8,7 @@ import { queueWeeklyContent } from "../content-engine/index.js";
 import { evaluateBoostTriggers } from "../trigger-engine/index.js";
 import { runSeoAudit } from "../seo-audit/index.js";
 import { addCompetitor, captureCompetitorSnapshots, getTrackedCompetitors } from "../competitor-monitor/index.js";
+import { getRevenueByPlatform } from "../lib/leadEvents.js";
 import { trackRank } from "../rank-tracker/index.js";
 import { captureSentimentTrend } from "../sentiment-tracker/index.js";
 import { checkDuplicateListings } from "../duplicate-listing-check/index.js";
@@ -41,7 +42,8 @@ export type ToolName =
   | "get_content_calendar"
   | "get_platform_breakdown"
   | "get_visibility_score_history"
-  | "get_tracked_competitors";
+  | "get_tracked_competitors"
+  | "get_revenue_by_platform";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -233,6 +235,13 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
     approvalRequired: false,
     run: (b) => getTrackedCompetitors(b.id),
     preview: (b) => getTrackedCompetitors(b.id),
+  },
+  get_revenue_by_platform: {
+    description: "Lead/booking/revenue events (calls, forms, CRM, bookings, Stripe) grouped by attributed platform, highest revenue first.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: (b) => getRevenueByPlatform(b.id),
+    preview: (b) => getRevenueByPlatform(b.id),
   },
   capture_competitor_snapshots: {
     description: "Captures a fresh rating/review-count snapshot for each tracked competitor via the Google Places API.",

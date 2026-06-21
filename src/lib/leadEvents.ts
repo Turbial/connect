@@ -39,6 +39,35 @@ export async function getLeadEventsForBusiness(businessId: string, sinceISO: str
   return (data ?? []) as LeadEvent[];
 }
 
+export interface RevenueByPlatformEntry {
+  platform: Platform | "unattributed";
+  leadCount: number;
+  totalAmountCents: number;
+}
+
+/** Groups every lead/revenue event ever recorded for a business by the
+ * platform it's attributed to, so an owner can see which platforms are
+ * actually driving calls/bookings/revenue rather than just views — events
+ * with no platform (e.g. a generic call-tracking number not tied to a
+ * specific post) are grouped under "unattributed" rather than dropped. */
+export async function getRevenueByPlatform(businessId: string): Promise<RevenueByPlatformEntry[]> {
+  const { data, error } = await supabase.from("lead_event").select("*").eq("business_id", businessId);
+  if (error) throw error;
+
+  const byPlatform = new Map<Platform | "unattributed", { leadCount: number; totalAmountCents: number }>();
+  for (const event of (data ?? []) as LeadEvent[]) {
+    const key = event.platform ?? "unattributed";
+    const existing = byPlatform.get(key) ?? { leadCount: 0, totalAmountCents: 0 };
+    existing.leadCount += 1;
+    existing.totalAmountCents += event.amount_cents ?? 0;
+    byPlatform.set(key, existing);
+  }
+
+  return [...byPlatform.entries()]
+    .map(([platform, totals]) => ({ platform, ...totals }))
+    .sort((a, b) => b.totalAmountCents - a.totalAmountCents);
+}
+
 /**
  * Example stub — NOT a real webhook listener. Shows the intended call shape
  * for a future inbound-call-tracking integration (e.g. a call-tracking

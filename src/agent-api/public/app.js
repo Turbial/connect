@@ -288,12 +288,36 @@ el("syncListingInfoBtn").addEventListener("click", async () => {
   }
 });
 
+/** Renders a minimal inline-SVG horizontal bar chart — no chart library
+ * dependency, just enough to compare a handful of bars at a glance. Values
+ * are assumed numeric and non-negative; labels are expected to come from a
+ * fixed enum (platform names) rather than free text, so they're safe to drop
+ * into the markup unescaped. */
+function barChart(bars, { width = 320, barHeight = 18, gap = 6 } = {}) {
+  const max = Math.max(1, ...bars.map((b) => b.value));
+  const labelWidth = 90;
+  const chartWidth = width - labelWidth;
+  const height = bars.length * (barHeight + gap);
+  const rows = bars
+    .map((b, i) => {
+      const y = i * (barHeight + gap);
+      const barW = Math.max(1, (b.value / max) * chartWidth);
+      return `
+        <text x="0" y="${y + barHeight - 4}" font-size="11">${b.label}</text>
+        <rect x="${labelWidth}" y="${y}" width="${barW}" height="${barHeight}" fill="#4a7dff" />
+        <text x="${labelWidth + barW + 4}" y="${y + barHeight - 4}" font-size="11">${b.value}</text>
+      `;
+    })
+    .join("");
+  return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${rows}</svg>`;
+}
+
 function renderScoreHistory(points) {
   if (!points || points.length === 0) return el("scoreHistoryCard").textContent = "No audits run yet.";
-  const rows = points
-    .map((p) => `<tr><td>${new Date(p.computedAt).toLocaleDateString()}</td><td>${p.score}</td></tr>`)
-    .join("");
-  el("scoreHistoryCard").innerHTML = `<table>${rows}</table>`;
+  const chart = barChart(
+    points.map((p) => ({ label: new Date(p.computedAt).toLocaleDateString(), value: p.score }))
+  );
+  el("scoreHistoryCard").innerHTML = chart;
 }
 
 el("loadScoreHistoryBtn").addEventListener("click", async () => {
@@ -308,10 +332,12 @@ el("loadScoreHistoryBtn").addEventListener("click", async () => {
 
 function renderPlatformBreakdown(entries) {
   if (!entries || entries.length === 0) return el("platformBreakdownCard").textContent = "No posted content yet.";
+  const chart = barChart(entries.map((e) => ({ label: e.platform, value: Number(e.avgScore.toFixed(1)) })));
   const rows = entries
     .map((e) => `<tr><td>${e.platform}</td><td>${e.postCount}</td><td>${e.avgScore.toFixed(1)}</td><td>${e.totalViews}</td><td>${e.totalClicks}</td><td>${e.totalEngagement}</td></tr>`)
     .join("");
-  el("platformBreakdownCard").innerHTML = `<table><tr><th>Platform</th><th>Posts</th><th>Avg score</th><th>Views</th><th>Clicks</th><th>Engagement</th></tr>${rows}</table>`;
+  el("platformBreakdownCard").innerHTML =
+    `<p class="muted">Avg score by platform</p>${chart}<table><tr><th>Platform</th><th>Posts</th><th>Avg score</th><th>Views</th><th>Clicks</th><th>Engagement</th></tr>${rows}</table>`;
 }
 
 el("loadPlatformBreakdownBtn").addEventListener("click", async () => {
@@ -319,6 +345,26 @@ el("loadPlatformBreakdownBtn").addEventListener("click", async () => {
   try {
     const { output } = await callTool("get_platform_breakdown");
     renderPlatformBreakdown(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+function renderRevenueByPlatform(entries) {
+  if (!entries || entries.length === 0) return el("revenueCard").textContent = "No lead/revenue events recorded yet.";
+  const chart = barChart(entries.map((e) => ({ label: e.platform, value: Math.round(e.totalAmountCents / 100) })));
+  const rows = entries
+    .map((e) => `<tr><td>${e.platform}</td><td>${e.leadCount}</td><td>$${(e.totalAmountCents / 100).toFixed(2)}</td></tr>`)
+    .join("");
+  el("revenueCard").innerHTML =
+    `<p class="muted">Revenue ($) by platform</p>${chart}<table><tr><th>Platform</th><th>Leads</th><th>Revenue</th></tr>${rows}</table>`;
+}
+
+el("loadRevenueBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("get_revenue_by_platform");
+    renderRevenueByPlatform(output);
   } catch (err) {
     showError(err.message);
   }
