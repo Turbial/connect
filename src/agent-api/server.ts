@@ -8,8 +8,9 @@ import { callTool, getToolCatalog, type ToolName } from "../tools/registry.js";
 import { credentialFieldsFor } from "../lib/platformCredentials.js";
 import { createBusiness } from "../lib/business.js";
 import { sendOwnerVerificationCode, confirmOwnerVerification } from "../lib/ownerVerification.js";
+import { createAccount, authenticateAccount, createSession, getAccountForToken, hasBusinessAccess, grantBusinessAccess } from "../lib/accounts.js";
 import { supabase } from "../lib/supabase.js";
-import type { Business, Platform } from "../types.js";
+import type { Account, Business, Platform } from "../types.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("./public", import.meta.url));
 
@@ -92,10 +93,64 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
     return;
   }
 
+  if (route.kind === "signup") {
+    let body: Record<string, unknown>;
+    try {
+      body = await readJsonBody(req);
+    } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : "Invalid request body" });
+      return;
+    }
+    try {
+      const account = await createAccount(body.email as string, body.password as string);
+      const session = await createSession(account.id);
+      sendJson(res, 201, { token: session.token, expiresAt: session.expiresAt });
+    } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : "Failed to create account" });
+    }
+    return;
+  }
+
+  if (route.kind === "login") {
+    let body: Record<string, unknown>;
+    try {
+      body = await readJsonBody(req);
+    } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : "Invalid request body" });
+      return;
+    }
+    try {
+      const account = await authenticateAccount(body.email as string, body.password as string);
+      if (!account) {
+        sendJson(res, 401, { error: "Invalid email or password" });
+        return;
+      }
+      const session = await createSession(account.id);
+      sendJson(res, 200, { token: session.token, expiresAt: session.expiresAt });
+    } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : "Failed to log in" });
+    }
+    return;
+  }
+
   const token = parseBearerToken(req.headers.authorization);
-  if (!isAuthorized(token, process.env.CONNECT_AGENT_API_KEY)) {
+  const masterAuthorized = isAuthorized(token, process.env.CONNECT_AGENT_API_KEY);
+  let sessionAccount: Account | null = null;
+  if (!masterAuthorized && token) {
+    sessionAccount = await getAccountForToken(token);
+  }
+  if (!masterAuthorized && !sessionAccount) {
     sendJson(res, 401, { error: "Unauthorized" });
     return;
+  }
+
+  // A session account (as opposed to the master key) is scoped to only the
+  // businesses it's been granted access to — the master key remains
+  // unscoped for existing cron/automation callers.
+  async function authorizeBusiness(businessId: string): Promise<boolean> {
+    if (masterAuthorized) return true;
+    if (!sessionAccount) return false;
+    return hasBusinessAccess(sessionAccount.id, businessId);
   }
 
   if (route.kind === "list_tools") {
@@ -125,6 +180,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
         ownerEmail: body.ownerEmail as string | undefined,
         ownerMobile: body.ownerMobile as string | undefined,
       });
+      if (sessionAccount) await grantBusinessAccess(sessionAccount.id, business.id, "owner");
       sendJson(res, 201, { business });
     } catch (err) {
       sendJson(res, 400, { error: err instanceof Error ? err.message : "Failed to create business" });
@@ -133,6 +189,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
   }
 
   if (route.kind === "send_owner_verification") {
+    if (!(await authorizeBusiness(route.businessId))) {
+      sendJson(res, 403, { error: "Forbidden" });
+      return;
+    }
     try {
       const { data: businessRow, error } = await supabase.from("business").select("*").eq("id", route.businessId).maybeSingle();
       if (error) throw error;
@@ -149,6 +209,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
   }
 
   if (route.kind === "confirm_owner_verification") {
+    if (!(await authorizeBusiness(route.businessId))) {
+      sendJson(res, 403, { error: "Forbidden" });
+      return;
+    }
     let body: Record<string, unknown>;
     try {
       body = await readJsonBody(req);
@@ -187,6 +251,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
   const { businessId, dryRun: dryRunRaw, ...input } = body;
   if (typeof businessId !== "string" || businessId.length === 0) {
     sendJson(res, 400, { error: "businessId is required" });
+    return;
+  }
+
+  if (!(await authorizeBusiness(businessId))) {
+    sendJson(res, 403, { error: "Forbidden" });
     return;
   }
 

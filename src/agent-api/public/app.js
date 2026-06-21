@@ -532,6 +532,27 @@ async function apiFetch(path, { method = "GET", apiKey, body } = {}) {
   return responseBody;
 }
 
+async function handleAuth(routePath) {
+  const email = el("loginEmail").value.trim();
+  const password = el("loginPassword").value;
+  if (!email || !password) {
+    el("loginResult").textContent = "Enter an email and password first.";
+    return;
+  }
+  try {
+    const body = await apiFetch(routePath, { method: "POST", body: { email, password } });
+    state.apiKey = body.token;
+    localStorage.setItem("connect_api_key", body.token);
+    el("apiKey").value = body.token;
+    el("loginResult").textContent = "Logged in — now create or load a business above.";
+  } catch (err) {
+    el("loginResult").textContent = err.message;
+  }
+}
+
+el("loginBtn").addEventListener("click", () => handleAuth("auth/login"));
+el("signupBtn").addEventListener("click", () => handleAuth("auth/signup"));
+
 el("createBusinessBtn").addEventListener("click", async () => {
   showOnboardingError("");
   const name = el("newBusinessName").value.trim();
@@ -721,6 +742,35 @@ el("loadAgentActionQueueBtn").addEventListener("click", async () => {
   try {
     const { output } = await callTool("get_agent_action_queue");
     renderAgentActionQueue(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+el("loadReportBrandingBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("get_report_branding");
+    if (!output) {
+      el("reportBrandingResult").textContent = "No branding set (or this tier doesn't include white_label_reports).";
+      return;
+    }
+    el("reportLogoUrl").value = output.logoUrl ?? "";
+    el("reportPrimaryColor").value = output.primaryColor ?? "";
+    el("reportBrandingResult").textContent = "Loaded.";
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+el("saveReportBrandingBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    await callTool("set_report_branding", {
+      logoUrl: el("reportLogoUrl").value.trim() || undefined,
+      primaryColor: el("reportPrimaryColor").value.trim() || undefined,
+    });
+    el("reportBrandingResult").textContent = "Saved.";
   } catch (err) {
     showError(err.message);
   }

@@ -809,3 +809,45 @@ alter table business add column if not exists owner_verification_attempts intege
 -- send and has no broadcast/follower concept — this is the single recipient
 -- an operator configures until a real customer opt-in list exists ─────────
 alter table business add column if not exists whatsapp_broadcast_recipient text;
+
+-- ── Phase 16: per-customer accounts/sessions, replacing the single shared
+-- CONNECT_AGENT_API_KEY as the only way to authenticate to the agent API.
+-- account_business is a join table since one account may eventually manage
+-- more than one business (e.g. an agency staffer); a session row is looked
+-- up by its random `token` on every request and expires independently of
+-- the account itself ─────────────────────────────────────────────────────
+create table if not exists account (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  password_hash text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists account_business (
+  id uuid primary key default gen_random_uuid(),
+  account_id uuid not null references account(id) on delete cascade,
+  business_id uuid not null references business(id) on delete cascade,
+  role text not null default 'owner', -- owner | staff
+  created_at timestamptz not null default now(),
+  unique (account_id, business_id)
+);
+
+create index if not exists idx_account_business_account on account_business(account_id);
+create index if not exists idx_account_business_business on account_business(business_id);
+
+create table if not exists session (
+  id uuid primary key default gen_random_uuid(),
+  account_id uuid not null references account(id) on delete cascade,
+  token text not null unique,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_session_token on session(token);
+
+-- ── Phase 16: white-label report branding — backs the previously-unused
+-- white_label_reports PackageFeature (src/lib/packages.ts). Lives on
+-- organization, not business, since branding is set agency/franchise-wide,
+-- matching white_label_name's existing scope ─────────────────────────────
+alter table organization add column if not exists report_logo_url text;
+alter table organization add column if not exists report_primary_color text;

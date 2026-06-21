@@ -11,6 +11,7 @@ import { getLatestVisibilityScore, getRankedOrgVisibilityRollup } from "../visib
 import { getRecentlyResolvedFixes } from "../lib/nextBestFix.js";
 import { getBoostPerformance } from "../lib/boostReport.js";
 import { withRetry } from "../lib/retry.js";
+import { getReportBranding, buildBrandedReportHtml } from "../lib/reportBranding.js";
 import type { Business, DistributionFailure, Organization, Post } from "../types.js";
 
 function formatWeekOf(date: Date): string {
@@ -215,7 +216,9 @@ export async function sendWeeklyReport(business: Business): Promise<void> {
   if (business.owner_phone) {
     await withRetry(() => sendApprovalSms(business.owner_phone!, report, organization?.twilio_from_number ?? null));
   } else if (business.owner_email) {
-    await withRetry(() => sendApprovalEmail(business.owner_email!, `Your ${orgDisplayName(organization)} Weekly Update`, report));
+    const branding = await getReportBranding(business);
+    const html = branding ? buildBrandedReportHtml(report, branding) : undefined;
+    await withRetry(() => sendApprovalEmail(business.owner_email!, `Your ${orgDisplayName(organization)} Weekly Update`, report, html));
   }
 }
 

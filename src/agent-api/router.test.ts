@@ -50,6 +50,11 @@ describe("matchRoute", () => {
       businessId: "abc-123",
     });
   });
+
+  it("matches signup and login", () => {
+    expect(matchRoute("POST", "/auth/signup")).toEqual({ kind: "signup" });
+    expect(matchRoute("POST", "/auth/login")).toEqual({ kind: "login" });
+  });
 });
 
 describe("isKnownToolName", () => {

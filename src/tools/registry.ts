@@ -17,6 +17,7 @@ import { syncListingInfo } from "../listings/index.js";
 import { analyzeContentPerformance, flagTrendingContent, predictDraftScore, getContentCalendar, getPlatformBreakdown, getPublishedPostStatus } from "../content-analytics/index.js";
 import { postContentItemNow, type ManualPostInput } from "../distribution/index.js";
 import { hasFeature } from "../lib/packages.js";
+import { getReportBranding, setReportBranding } from "../lib/reportBranding.js";
 import type { AgentActionRiskLevel, AgentActionSource, Business, ContentItem, Platform } from "../types.js";
 
 function requireFeature(business: Business, feature: Parameters<typeof hasFeature>[1]): void {
@@ -75,7 +76,9 @@ export type ToolName =
   | "get_competitor_comparison"
   | "get_org_visibility_rollup"
   | "get_vertical_benchmark"
-  | "get_agent_action_queue";
+  | "get_agent_action_queue"
+  | "get_report_branding"
+  | "set_report_branding";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -436,6 +439,36 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
     preview: async (b) => {
       requireFeature(b, "agent_action_queue");
       return getRecentAgentActions(b.id);
+    },
+  },
+  get_report_branding: {
+    description: "This business's white-label report branding (logo/color), or null if its tier doesn't include white_label_reports or it has no organization.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: (b) => getReportBranding(b),
+    preview: (b) => getReportBranding(b),
+  },
+  set_report_branding: {
+    description:
+      'Sets the org-wide logo/color used on this business\'s weekly report emails. Requires the white_label_reports feature. Call with input: { "logoUrl": "https://...", "primaryColor": "#112233" }.',
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b, input) => {
+      requireFeature(b, "white_label_reports");
+      if (!b.organization_id) throw new Error("This business has no organization to brand.");
+      return setReportBranding(b.organization_id, {
+        logoUrl: typeof input.logoUrl === "string" ? input.logoUrl : null,
+        primaryColor: typeof input.primaryColor === "string" ? input.primaryColor : null,
+      });
+    },
+    preview: async (b, input) => {
+      requireFeature(b, "white_label_reports");
+      if (!b.organization_id) throw new Error("This business has no organization to brand.");
+      return {
+        wouldSet: true,
+        logoUrl: typeof input.logoUrl === "string" ? input.logoUrl : null,
+        primaryColor: typeof input.primaryColor === "string" ? input.primaryColor : null,
+      };
     },
   },
 };

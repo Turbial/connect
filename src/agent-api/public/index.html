@@ -10,7 +10,7 @@
   <header>
     <h1>Connect</h1>
     <div class="auth-bar" id="authBar">
-      <input id="apiKey" type="password" placeholder="Agent API key" />
+      <input id="apiKey" type="password" placeholder="Agent API key or session token" />
       <input id="businessId" type="text" placeholder="Business ID" />
       <button id="loadBtn">Load</button>
       <span id="authStatus"></span>
@@ -19,6 +19,16 @@
       <span id="loadedAs"></span>
       <button id="switchBusinessBtn">Switch business</button>
     </div>
+    <details class="auth-bar">
+      <summary>Or log in / sign up</summary>
+      <div class="row">
+        <input id="loginEmail" type="text" placeholder="Email" />
+        <input id="loginPassword" type="password" placeholder="Password (8+ chars)" />
+        <button id="loginBtn">Log in</button>
+        <button id="signupBtn">Sign up</button>
+      </div>
+      <div id="loginResult"></div>
+    </details>
   </header>
 
   <main id="onboarding">
@@ -120,6 +130,18 @@
         <p class="muted">How this business compares to its industry vertical.</p>
         <button id="loadVerticalBenchmarkBtn">Load benchmark</button>
         <div id="verticalBenchmarkCard">—</div>
+      </section>
+
+      <section class="card">
+        <h2>Report branding</h2>
+        <p class="muted">Agency/Franchise tiers only — requires white_label_reports feature. Used on weekly report emails.</p>
+        <div class="row">
+          <input id="reportLogoUrl" type="text" placeholder="Logo URL" />
+          <input id="reportPrimaryColor" type="text" placeholder="Primary color, e.g. #112233" />
+        </div>
+        <button id="loadReportBrandingBtn">Load current branding</button>
+        <button id="saveReportBrandingBtn">Save branding</button>
+        <div id="reportBrandingResult"></div>
       </section>
 
       <section class="card">

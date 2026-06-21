@@ -336,6 +336,38 @@ export interface Organization {
    * setting on this table. */
   twilio_from_number: string | null;
   whatsapp_phone_number_id: string | null;
+  /** Phase 16: white-label report branding, gated by the white_label_reports
+   * PackageFeature — null means the report uses MightyMax's default look,
+   * same null-means-default convention as every other org setting here. */
+  report_logo_url: string | null;
+  report_primary_color: string | null;
+  created_at: string;
+}
+
+/** Phase 16: a per-customer login identity, replacing the single shared
+ * CONNECT_AGENT_API_KEY as the only way to authenticate to the agent API. */
+export interface Account {
+  id: string;
+  email: string;
+  password_hash: string;
+  created_at: string;
+}
+
+export type AccountRole = "owner" | "staff";
+
+export interface AccountBusiness {
+  id: string;
+  account_id: string;
+  business_id: string;
+  role: AccountRole;
+  created_at: string;
+}
+
+export interface Session {
+  id: string;
+  account_id: string;
+  token: string;
+  expires_at: string;
   created_at: string;
 }
 
