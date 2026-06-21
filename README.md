@@ -19,9 +19,13 @@ Phase 12 triples platform coverage (36 → 108), AI capabilities (6 → 18), and
 modules (6 → 18), and doubles per-item richness (a second caption variant per content
 item, `impressions`/`shares` on post metrics, and deeper audit/signal checks). Phase 15
 adds 10 more resale/marketplace platforms (108 → 118) plus a `get_content_calendar`
-tool/dashboard card. The 82 generic-stub platforms route through a single generic stub
-adapter (`src/distribution/genericAdapter.ts`) rather than bespoke integrations — see
-Known gaps below.
+tool/dashboard card. Phase 16 adds real Stripe and generic CRM/form/booking webhooks
+(`POST /webhooks/stripe`, `POST /webhooks/crm`) so lead/revenue attribution into
+`lead_event` is no longer just example stubs, plus a `get_revenue_by_platform`
+tool/dashboard card and inline-SVG bar charts on the score-history and platform-breakdown
+cards. The 82 generic-stub platforms route through a single generic stub adapter
+(`src/distribution/genericAdapter.ts`) rather than bespoke integrations — see Known gaps
+below.
 
 ## Services
 
@@ -46,7 +50,7 @@ Known gaps below.
 | `src/jobs/weeklyBatch.ts` | Cron entrypoint: generate → request approval → resolve timeouts → post approved → send report. |
 | `src/jobs/collectPerformance.ts` | Cron entrypoint: poll insights for all businesses, then evaluate boost triggers. |
 | `src/jobs/runServiceModules.ts` | Cron entrypoint: runs the SEO audit, competitor snapshot capture, listing sync, rank tracking, sentiment trend capture, duplicate listing check, and the 12 Phase 12 service-signal modules for all businesses (`npm run services`). |
-| `src/index.ts` | HTTP server for Twilio's inbound SMS webhook (`/webhooks/sms`, disambiguating content vs. boost replies) and Reach's review webhook (`/webhooks/reach-review`). |
+| `src/index.ts` | HTTP server for Twilio's inbound SMS webhook (`/webhooks/sms`, disambiguating content vs. boost replies), Reach's review webhook (`/webhooks/reach-review`), and (Phase 16) Stripe's checkout webhook (`/webhooks/stripe`) and a generic CRM/form/booking lead webhook (`/webhooks/crm`), both recording real `lead_event` rows. |
 | `src/tools` | Phase 8.10: the typed tool registry (`callTool`/`getToolCatalog`) every agent-facing surface below dispatches through — same dry-run/approval/audit-log behavior for every caller. |
 | `src/agent-api` | Phase 10: a minimal bearer-token-authed HTTP API (`GET /tools`, `POST /tools/:name`) exposing the tool registry to any agent able to make HTTP calls (`npm run agent-api`). |
 | `src/mcp` | Phase 12: an MCP stdio server (`npm run mcp`) exposing the same tool registry over the Model Context Protocol, so Claude Desktop/Code (or any other MCP client) can attach to Connect directly as a tool-using agent. |

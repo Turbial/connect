@@ -16,8 +16,9 @@ import { sendApprovalWhatsapp, whatsappButtonToText } from "./approval/whatsapp.
 import { sendOwnerVerificationCode, confirmOwnerVerification } from "./lib/ownerVerification.js";
 import { classifyChatIntent, buildChatIntentReply } from "./chat/scoreCard.js";
 import { buildOperatorSnapshot } from "./lib/operatorSnapshot.js";
-import { verifyTwilioWebhook, verifyMetaWebhook, verifyReachWebhook, verifyBusinessRoute } from "./lib/webhookAuth.js";
-import type { Business, Platform } from "./types.js";
+import { verifyTwilioWebhook, verifyMetaWebhook, verifyReachWebhook, verifyBusinessRoute, verifyStripeWebhook, verifyCrmWebhook } from "./lib/webhookAuth.js";
+import { recordLeadEvent } from "./lib/leadEvents.js";
+import type { Business, Platform, LeadEvent } from "./types.js";
 
 /** Phase 7.1: dispatches a decision (already-resolved text, e.g. "yes"/"no"/
  * "edit" from a WhatsApp button click, or the raw SMS body) for a business —
@@ -199,6 +200,88 @@ async function handleReachWebhook(req: http.IncomingMessage, res: http.ServerRes
   }
 
   await handleReachReview(payload);
+  res.writeHead(200).end();
+}
+
+/** Phase 16: Stripe webhook for real revenue attribution into lead_event —
+ * the first non-stub consumer of recordLeadEvent's "stripe" source. Expects
+ * the business id to be passed through Stripe Checkout's client_reference_id
+ * (the standard way to round-trip your own id through a Checkout session)
+ * rather than maintaining a separate stripe_customer_id mapping table. Only
+ * checkout.session.completed is handled; other event types are accepted but
+ * ignored so Stripe doesn't retry them as failures. */
+async function handleStripeWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
+  let rawBody = "";
+  for await (const chunk of req) rawBody += chunk;
+
+  if (!verifyStripeWebhook(rawBody, req.headers["stripe-signature"] as string | undefined)) {
+    res.writeHead(403).end();
+    return;
+  }
+
+  let event;
+  try {
+    event = JSON.parse(rawBody);
+  } catch {
+    res.writeHead(400).end();
+    return;
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data?.object;
+    const businessId: string | undefined = session?.client_reference_id;
+    if (businessId) {
+      await recordLeadEvent({
+        businessId,
+        source: "stripe",
+        externalRef: session.id,
+        amountCents: typeof session.amount_total === "number" ? session.amount_total : null,
+      });
+    }
+  }
+
+  res.writeHead(200).end();
+}
+
+/** Phase 16: generic inbound webhook for CRM/form/booking lead events —
+ * the real listener the docstrings in lib/leadEvents.ts long described as
+ * not existing yet. Any system that can POST JSON with a shared secret
+ * (a landing-page form handler, a booking widget, a CRM's outbound webhook)
+ * can attribute a lead straight into lead_event without code changes here. */
+async function handleCrmWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
+  if (!verifyCrmWebhook(req.headers.authorization)) {
+    res.writeHead(401).end();
+    return;
+  }
+
+  let body = "";
+  for await (const chunk of req) body += chunk;
+
+  let payload;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    res.writeHead(400).end();
+    return;
+  }
+
+  const allowedSources: LeadEvent["source"][] = ["form", "crm", "booking"];
+  if (!payload.business_id || !allowedSources.includes(payload.source)) {
+    res.writeHead(400).end();
+    return;
+  }
+
+  await recordLeadEvent({
+    businessId: payload.business_id,
+    contentItemId: payload.content_item_id ?? null,
+    postId: payload.post_id ?? null,
+    platform: payload.platform ?? null,
+    source: payload.source,
+    externalRef: payload.external_ref ?? null,
+    amountCents: typeof payload.amount_cents === "number" ? payload.amount_cents : null,
+    occurredAt: payload.occurred_at,
+  });
+
   res.writeHead(200).end();
 }
 
@@ -404,6 +487,14 @@ async function routeWebhookRequest(req: http.IncomingMessage, res: http.ServerRe
     }
     if (req.method === "POST" && req.url === "/webhooks/missed-call") {
       await handleMissedCallWebhook(req, res);
+      return;
+    }
+    if (req.method === "POST" && req.url === "/webhooks/stripe") {
+      await handleStripeWebhook(req, res);
+      return;
+    }
+    if (req.method === "POST" && req.url === "/webhooks/crm") {
+      await handleCrmWebhook(req, res);
       return;
     }
     if (req.method === "GET" && req.url === "/platforms/partner-access-risk") {

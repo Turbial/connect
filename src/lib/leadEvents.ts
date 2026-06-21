@@ -13,8 +13,10 @@ export interface RecordLeadEventInput {
 }
 
 /** Generic ingestion point for non-GBP lead/booking/revenue attribution
- * (Phase 3.1). This is what a future CRM/Stripe webhook handler would call
- * once that integration actually exists — there is no such webhook today. */
+ * (Phase 3.1). Called directly by the Stripe and generic CRM/form/booking
+ * webhook handlers in src/index.ts (Phase 16) for real revenue/lead
+ * attribution, and by the call/form stub helpers below for shapes that
+ * don't have a real provider wired up yet. */
 export async function recordLeadEvent(input: RecordLeadEventInput): Promise<void> {
   const { error } = await supabase.from("lead_event").insert({
     business_id: input.businessId,

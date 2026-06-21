@@ -44,3 +44,35 @@ export function verifyReachWebhook(authorizationHeader: string | undefined | nul
 export function verifyBusinessRoute(authorizationHeader: string | undefined | null): boolean {
   return isAuthorized(parseBearerToken(authorizationHeader), process.env.CONNECT_AGENT_API_KEY);
 }
+
+/** Verifies an inbound Stripe webhook via Stripe's documented Stripe-Signature
+ * scheme (`t=<timestamp>,v1=<hmac>`, HMAC-SHA256 of `${t}.${rawBody}`) — no
+ * Stripe SDK dependency needed for signature verification alone. Fails closed
+ * if STRIPE_WEBHOOK_SECRET isn't configured. */
+export function verifyStripeWebhook(rawBody: string, signatureHeader: string | undefined | null): boolean {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!secret || !signatureHeader) return false;
+
+  const parts = new Map(
+    signatureHeader
+      .split(",")
+      .map((part) => part.trim().split("="))
+      .filter((pair): pair is [string, string] => pair.length === 2)
+  );
+  const timestamp = parts.get("t");
+  const signature = parts.get("v1");
+  if (!timestamp || !signature) return false;
+
+  const expected = createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
+  const expectedBuf = Buffer.from(expected);
+  const actualBuf = Buffer.from(signature);
+  if (expectedBuf.length !== actualBuf.length) return false;
+  return timingSafeEqual(expectedBuf, actualBuf);
+}
+
+/** Verifies an inbound generic CRM/form/booking lead webhook via a
+ * shared-secret bearer token, same scheme as Reach. Fails closed if
+ * CRM_WEBHOOK_SECRET isn't configured. */
+export function verifyCrmWebhook(authorizationHeader: string | undefined | null): boolean {
+  return isAuthorized(parseBearerToken(authorizationHeader), process.env.CRM_WEBHOOK_SECRET);
+}
