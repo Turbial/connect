@@ -14,7 +14,22 @@ import { captureSentimentTrend } from "../sentiment-tracker/index.js";
 import { checkDuplicateListings } from "../duplicate-listing-check/index.js";
 import { syncListingInfo } from "../listings/index.js";
 import { analyzeContentPerformance, flagTrendingContent, predictDraftScore, getContentCalendar, getPlatformBreakdown, getPublishedPostStatus } from "../content-analytics/index.js";
+import { postContentItemNow, type ManualPostInput } from "../distribution/index.js";
 import type { AgentActionRiskLevel, AgentActionSource, Business, ContentItem, Platform } from "../types.js";
+
+function toManualPostInput(input: Record<string, unknown>): ManualPostInput {
+  const caption = input.caption;
+  const platforms = input.platforms;
+  if (typeof caption !== "string" || caption.length === 0) throw new Error('"caption" is required.');
+  if (!Array.isArray(platforms) || platforms.length === 0) throw new Error('"platforms" must be a non-empty array.');
+  return {
+    caption,
+    platforms: platforms as Platform[],
+    mediaUrl: typeof input.mediaUrl === "string" ? input.mediaUrl : null,
+    mediaType: input.mediaType === "video" ? "video" : "image",
+    surface: typeof input.surface === "string" ? (input.surface as ContentItem["surface"]) : undefined,
+  };
+}
 
 /** Phase 8.10: the doc's tool-calling intent router (§15) — discrete,
  * typed-input/output functions wrapping existing tested logic, not a
@@ -44,7 +59,8 @@ export type ToolName =
   | "get_visibility_score_history"
   | "get_tracked_competitors"
   | "get_revenue_by_platform"
-  | "get_post_status";
+  | "get_post_status"
+  | "post_content_now";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -177,6 +193,14 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
       return { queued: true, businessId: b.id };
     },
     preview: async (b) => ({ wouldQueue: true, businessId: b.id }),
+  },
+  post_content_now: {
+    description:
+      'Posts a caption (and optional media) immediately to the listed platforms for real, bypassing queue_content and owner approval entirely. Call with input: { "caption": "...", "platforms": ["instagram", "facebook"], "mediaUrl": "optional", "mediaType": "image|video", "surface": "optional, defaults to feed" }. Skips any platform not yet live (sandbox/stub) without failing the whole call.',
+    riskLevel: "high",
+    approvalRequired: false,
+    run: (b, input) => postContentItemNow(b, toManualPostInput(input)),
+    preview: async (_b, input) => ({ wouldPost: true, ...toManualPostInput(input) }),
   },
   propose_boost: {
     description: "Evaluates whether any recent organic post qualifies for a paid boost and, if so, requests owner approval to launch it as a real (paused) ad.",

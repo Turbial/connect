@@ -192,6 +192,23 @@ el("queueContentBtn").addEventListener("click", async () => {
   }
 });
 
+el("postNowBtn").addEventListener("click", async () => {
+  showError("");
+  const caption = el("postNowCaption").value.trim();
+  const mediaUrl = el("postNowMediaUrl").value.trim();
+  const mediaType = el("postNowMediaType").value;
+  const platforms = el("postNowPlatforms").value
+    .split(",")
+    .map((p) => p.trim().toLowerCase())
+    .filter(Boolean);
+  try {
+    const result = await callTool("post_content_now", { caption, mediaUrl: mediaUrl || undefined, mediaType, platforms });
+    el("postNowResult").textContent = JSON.stringify(result.output ?? result);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
 function renderPerformanceAnalysis(analysis) {
   const insightRows = (analysis.insights || [])
     .filter((i) => i.significant)

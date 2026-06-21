@@ -147,6 +147,23 @@ async function recordPost(
   }
 }
 
+/** Dispatches one content item to every platform it targets, then marks it
+ * posted — the unit of work shared by the weekly batch (postApprovedContent)
+ * and any direct, owner-approval-bypassing post (postContentItemNow). */
+async function dispatchContentItem(business: Business, item: ContentItem): Promise<void> {
+  for (const platform of item.platforms) {
+    if (!isLivePlatform(platform)) {
+      // Stub/unsupported platforms don't post anywhere real — skip
+      // dispatch entirely rather than record a post that never happened.
+      continue;
+    }
+
+    await recordPost(business, item, platform, "a", () => postToPlatform(business, item, platform));
+  }
+
+  await supabase.from("content_item").update({ status: "posted" }).eq("id", item.id);
+}
+
 /** Posts every approved content item for a business to its target platforms. */
 export async function postApprovedContent(business: Business): Promise<void> {
   const { data: items, error } = await supabase
@@ -157,18 +174,52 @@ export async function postApprovedContent(business: Business): Promise<void> {
   if (error) throw error;
 
   for (const item of (items ?? []) as ContentItem[]) {
-    for (const platform of item.platforms) {
-      if (!isLivePlatform(platform)) {
-        // Stub/unsupported platforms don't post anywhere real — skip
-        // dispatch entirely rather than record a post that never happened.
-        continue;
-      }
-
-      await recordPost(business, item, platform, "a", () => postToPlatform(business, item, platform));
-    }
-
-    await supabase.from("content_item").update({ status: "posted" }).eq("id", item.id);
+    await dispatchContentItem(business, item);
   }
+}
+
+export interface ManualPostInput {
+  caption: string;
+  mediaUrl?: string | null;
+  mediaType?: ContentItem["media_type"];
+  surface?: ContentItem["surface"];
+  platforms: Platform[];
+}
+
+export interface ManualPostResult {
+  contentItemId: string;
+  platforms: Platform[];
+}
+
+/** Writes a content item with source "manual" and posts it immediately to
+ * every requested platform, real dispatch included — deliberately skips the
+ * queue_content → owner-approval flow every other content item goes through.
+ * A high-risk, no-approval tool: calling it is itself the approval. */
+export async function postContentItemNow(business: Business, input: ManualPostInput): Promise<ManualPostResult> {
+  if (input.platforms.length === 0) throw new Error("At least one platform is required.");
+
+  const { data: inserted, error } = await supabase
+    .from("content_item")
+    .insert({
+      business_id: business.id,
+      source: "manual",
+      caption: input.caption,
+      caption_variant_b: null,
+      media_url: input.mediaUrl ?? null,
+      media_type: input.mediaType ?? "image",
+      surface: input.surface ?? "feed",
+      platforms: input.platforms,
+      status: "approved",
+      review_id: null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+
+  const item = inserted as ContentItem;
+  await dispatchContentItem(business, item);
+
+  return { contentItemId: item.id, platforms: item.platforms };
 }
 
 /** Phase 8.1: hours to wait after the "a" variant goes live before posting

@@ -97,6 +97,26 @@
       </section>
 
       <section class="card">
+        <h2>Post now</h2>
+        <p class="muted">Posts immediately to the listed platforms for real — skips queue_content and owner approval entirely.</p>
+        <div class="row">
+          <textarea id="postNowCaption" placeholder="Caption" rows="3"></textarea>
+        </div>
+        <div class="row">
+          <input id="postNowMediaUrl" type="text" placeholder="Media URL (optional)" />
+          <select id="postNowMediaType">
+            <option value="image">Image</option>
+            <option value="video">Video</option>
+          </select>
+        </div>
+        <div class="row">
+          <input id="postNowPlatforms" type="text" placeholder="Platforms, comma-separated, e.g. instagram, facebook" />
+        </div>
+        <button id="postNowBtn">Post now</button>
+        <div id="postNowResult"></div>
+      </section>
+
+      <section class="card">
         <h2>Content performance</h2>
         <button id="analyzePerformanceBtn">Analyze what's working</button>
         <div id="performanceCard"></div>
