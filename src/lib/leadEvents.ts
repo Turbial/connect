@@ -13,10 +13,8 @@ export interface RecordLeadEventInput {
 }
 
 /** Generic ingestion point for non-GBP lead/booking/revenue attribution
- * (Phase 3.1). Called directly by the Stripe and generic CRM/form/booking
- * webhook handlers in src/index.ts (Phase 16) for real revenue/lead
- * attribution, and by the call/form stub helpers below for shapes that
- * don't have a real provider wired up yet. */
+ * (Phase 3.1). Called directly by the Stripe webhook and the generic
+ * CRM/form/booking/call webhook handlers in src/index.ts. */
 export async function recordLeadEvent(input: RecordLeadEventInput): Promise<void> {
   const { error } = await supabase.from("lead_event").insert({
     business_id: input.businessId,
@@ -68,43 +66,4 @@ export async function getRevenueByPlatform(businessId: string): Promise<RevenueB
   return [...byPlatform.entries()]
     .map(([platform, totals]) => ({ platform, ...totals }))
     .sort((a, b) => b.totalAmountCents - a.totalAmountCents);
-}
-
-/**
- * Example stub — NOT a real webhook listener. Shows the intended call shape
- * for a future inbound-call-tracking integration (e.g. a call-tracking
- * number per post/content_item) once that integration is confirmed to
- * exist. Calling this today is a no-op beyond the insert itself; there is
- * no call-tracking provider wired up.
- */
-export async function recordCallEvent(
-  businessId: string,
-  contentItemId: string | null,
-  callerNumber: string
-): Promise<void> {
-  await recordLeadEvent({
-    businessId,
-    contentItemId,
-    source: "call",
-    externalRef: callerNumber,
-  });
-}
-
-/**
- * Example stub — NOT a real webhook listener. Shows the intended call shape
- * for a future form-submission integration (e.g. a landing page or Reach/CRM
- * form tied to a UTM-tagged link's utm_content value) once that integration
- * is confirmed to exist.
- */
-export async function recordFormEvent(
-  businessId: string,
-  contentItemId: string | null,
-  formSubmissionId: string
-): Promise<void> {
-  await recordLeadEvent({
-    businessId,
-    contentItemId,
-    source: "form",
-    externalRef: formSubmissionId,
-  });
 }

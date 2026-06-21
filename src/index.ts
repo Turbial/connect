@@ -265,7 +265,7 @@ async function handleCrmWebhook(req: http.IncomingMessage, res: http.ServerRespo
     return;
   }
 
-  const allowedSources: LeadEvent["source"][] = ["form", "crm", "booking"];
+  const allowedSources: LeadEvent["source"][] = ["form", "crm", "booking", "call"];
   if (!payload.business_id || !allowedSources.includes(payload.source)) {
     res.writeHead(400).end();
     return;
