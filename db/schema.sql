@@ -440,6 +440,28 @@ alter table business add column if not exists ebay_id text;
 alter table business add column if not exists ebay_access_token text;
 alter table business add column if not exists naverblog_id text;
 alter table business add column if not exists naverblog_access_token text;
+-- Phase 15: 10 more marketplace/resale platforms added as generic stub
+-- adapters (see src/distribution/genericAdapter.ts) alongside Phase 12's.
+alter table business add column if not exists shopee_id text;
+alter table business add column if not exists shopee_access_token text;
+alter table business add column if not exists lazada_id text;
+alter table business add column if not exists lazada_access_token text;
+alter table business add column if not exists mercadolibre_id text;
+alter table business add column if not exists mercadolibre_access_token text;
+alter table business add column if not exists rakuten_id text;
+alter table business add column if not exists rakuten_access_token text;
+alter table business add column if not exists aliexpress_id text;
+alter table business add column if not exists aliexpress_access_token text;
+alter table business add column if not exists wish_id text;
+alter table business add column if not exists wish_access_token text;
+alter table business add column if not exists depop_id text;
+alter table business add column if not exists depop_access_token text;
+alter table business add column if not exists poshmark_id text;
+alter table business add column if not exists poshmark_access_token text;
+alter table business add column if not exists vinted_id text;
+alter table business add column if not exists vinted_access_token text;
+alter table business add column if not exists snapdeal_id text;
+alter table business add column if not exists snapdeal_access_token text;
 alter table content_item add column if not exists caption_variant_b text;
 alter table post add column if not exists impressions integer not null default 0;
 alter table post add column if not exists shares integer not null default 0;

@@ -78,6 +78,39 @@ export async function rankContentPerformance(businessId: string): Promise<Conten
     .sort((a, b) => b.score - a.score);
 }
 
+export interface ContentCalendarEntry {
+  contentItemId: string;
+  caption: string;
+  mediaType: MediaType;
+  surface: Surface;
+  platforms: Platform[];
+  status: ContentItem["status"];
+  createdAt: string;
+}
+
+/** Everything still ahead of the owner — queued, approved, or edited content
+ * that hasn't posted yet — ordered oldest-first so the next thing due to go
+ * out is always at the top. */
+export async function getContentCalendar(businessId: string): Promise<ContentCalendarEntry[]> {
+  const { data: items, error } = await supabase
+    .from("content_item")
+    .select("*")
+    .eq("business_id", businessId)
+    .in("status", ["queued", "approved", "edited"])
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+
+  return ((items ?? []) as ContentItem[]).map((item) => ({
+    contentItemId: item.id,
+    caption: item.caption,
+    mediaType: item.media_type,
+    surface: item.surface,
+    platforms: item.platforms,
+    status: item.status,
+    createdAt: item.created_at,
+  }));
+}
+
 /** Splits ranked entries into a top and bottom group to compare, using a
  * fixed fraction of the list (clamped so small lists still get at least one
  * entry per side, and so the two groups never overlap). */

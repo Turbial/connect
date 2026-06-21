@@ -1,4 +1,4 @@
-export type Platform = "gbp" | "facebook" | "instagram" | "pinterest" | "twitter" | "linkedin" | "threads" | "yelp" | "nextdoor" | "snapchat" | "tiktok" | "youtube" | "whatsapp" | "reddit" | "bluesky" | "mastodon" | "tumblr" | "wechat" | "telegram" | "discord" | "medium" | "vk" | "line" | "vimeo" | "flickr" | "foursquare" | "bing" | "applebusiness" | "houzz" | "angi" | "thumbtack" | "tripadvisor" | "opentable" | "quora" | "trustpilot" | "yandex" | "weibo" | "xiaohongshu" | "kakaotalk" | "naver" | "baidu" | "douyin" | "kuaishou" | "weverse" | "signal" | "viber" | "kik" | "skype" | "slack" | "meetup" | "eventbrite" | "craigslist" | "indeed" | "glassdoor" | "capterra" | "g2" | "producthunt" | "behance" | "dribbble" | "deviantart" | "fivehundredpx" | "unsplash" | "soundcloud" | "spotify" | "applepodcasts" | "googlepodcasts" | "anchor" | "substack" | "ghost" | "wordpress" | "blogger" | "weebly" | "wix" | "squarespace" | "etsy" | "amazon" | "shopify" | "walmart" | "target" | "instacart" | "doordash" | "ubereats" | "grubhub" | "postmates" | "zomato" | "swiggy" | "justeat" | "deliveroo" | "booking" | "expedia" | "airbnb" | "vrbo" | "hotelscom" | "kayak" | "agoda" | "trivago" | "hostelworld" | "couchsurfing" | "meituan" | "dianping" | "gaode" | "here" | "mapquest" | "waze" | "alibaba" | "tmall" | "ebay" | "naverblog";
+export type Platform = "gbp" | "facebook" | "instagram" | "pinterest" | "twitter" | "linkedin" | "threads" | "yelp" | "nextdoor" | "snapchat" | "tiktok" | "youtube" | "whatsapp" | "reddit" | "bluesky" | "mastodon" | "tumblr" | "wechat" | "telegram" | "discord" | "medium" | "vk" | "line" | "vimeo" | "flickr" | "foursquare" | "bing" | "applebusiness" | "houzz" | "angi" | "thumbtack" | "tripadvisor" | "opentable" | "quora" | "trustpilot" | "yandex" | "weibo" | "xiaohongshu" | "kakaotalk" | "naver" | "baidu" | "douyin" | "kuaishou" | "weverse" | "signal" | "viber" | "kik" | "skype" | "slack" | "meetup" | "eventbrite" | "craigslist" | "indeed" | "glassdoor" | "capterra" | "g2" | "producthunt" | "behance" | "dribbble" | "deviantart" | "fivehundredpx" | "unsplash" | "soundcloud" | "spotify" | "applepodcasts" | "googlepodcasts" | "anchor" | "substack" | "ghost" | "wordpress" | "blogger" | "weebly" | "wix" | "squarespace" | "etsy" | "amazon" | "shopify" | "walmart" | "target" | "instacart" | "doordash" | "ubereats" | "grubhub" | "postmates" | "zomato" | "swiggy" | "justeat" | "deliveroo" | "booking" | "expedia" | "airbnb" | "vrbo" | "hotelscom" | "kayak" | "agoda" | "trivago" | "hostelworld" | "couchsurfing" | "meituan" | "dianping" | "gaode" | "here" | "mapquest" | "waze" | "alibaba" | "tmall" | "ebay" | "naverblog" | "shopee" | "lazada" | "mercadolibre" | "rakuten" | "aliexpress" | "wish" | "depop" | "poshmark" | "vinted" | "snapdeal";
 export type AdPlatform = "meta" | "google";
 export type MediaType = "image" | "video";
 
@@ -235,6 +235,26 @@ export interface Business {
   ebay_access_token: string | null;
   naverblog_id: string | null;
   naverblog_access_token: string | null;
+  shopee_id: string | null;
+  shopee_access_token: string | null;
+  lazada_id: string | null;
+  lazada_access_token: string | null;
+  mercadolibre_id: string | null;
+  mercadolibre_access_token: string | null;
+  rakuten_id: string | null;
+  rakuten_access_token: string | null;
+  aliexpress_id: string | null;
+  aliexpress_access_token: string | null;
+  wish_id: string | null;
+  wish_access_token: string | null;
+  depop_id: string | null;
+  depop_access_token: string | null;
+  poshmark_id: string | null;
+  poshmark_access_token: string | null;
+  vinted_id: string | null;
+  vinted_access_token: string | null;
+  snapdeal_id: string | null;
+  snapdeal_access_token: string | null;
   boost_views_threshold: number | null;
   boost_engagement_threshold: number | null;
   boost_budget_cents: number | null;

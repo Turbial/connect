@@ -1,24 +1,27 @@
 # Connect — MightyMax Distribution Layer
 
-The MightyMax Visibility Engine's Distribution Layer: organic posting across 108
+The MightyMax Visibility Engine's Distribution Layer: organic posting across 118
 platforms (GBP, Facebook, Instagram, Pinterest, X, LinkedIn, Threads, Yelp, Nextdoor,
 Snapchat, TikTok, YouTube, WhatsApp, Reddit, Bluesky, Mastodon, Tumblr, WeChat,
 Telegram, Discord, Medium, VK, LINE, Vimeo, Flickr, Foursquare, Bing Places, Apple
 Business Connect, Houzz, Angi, Thumbtack, Tripadvisor, OpenTable, Quora, Trustpilot,
-Yandex Business, plus 72 more added in Phase 12 spanning regional social (Weibo,
-Xiaohongshu, Douyin, KakaoTalk...), messaging (Signal, Viber, Skype, Slack...),
-listings/marketplaces (Etsy, Amazon, Shopify, eBay...), delivery/booking (DoorDash,
-Airbnb, Booking.com...), and maps (Waze, HERE, MapQuest...)) with SMS/email owner
-approval, an organic → paid boost trigger with real Meta/Google Ads campaign launch,
-and a review → content feedback loop fed by Reach. Built standalone — integration
-with MotionBlue, TurboAd, and Reach is isolated behind clear module boundaries below.
+Yandex Business, plus 82 more added across Phase 12 and Phase 15 spanning regional
+social (Weibo, Xiaohongshu, Douyin, KakaoTalk...), messaging (Signal, Viber, Skype,
+Slack...), listings/marketplaces (Etsy, Amazon, Shopify, eBay, Shopee, Lazada,
+MercadoLibre...), delivery/booking (DoorDash, Airbnb, Booking.com...), resale
+(Depop, Poshmark, Vinted...), and maps (Waze, HERE, MapQuest...)) with SMS/email
+owner approval, an organic → paid boost trigger with real Meta/Google Ads campaign
+launch, and a review → content feedback loop fed by Reach. Built standalone —
+integration with MotionBlue, TurboAd, and Reach is isolated behind clear module
+boundaries below.
 
 Phase 12 triples platform coverage (36 → 108), AI capabilities (6 → 18), and service
 modules (6 → 18), and doubles per-item richness (a second caption variant per content
-item, `impressions`/`shares` on post metrics, and deeper audit/signal checks). The 72
-new platforms route through a single generic stub adapter
-(`src/distribution/genericAdapter.ts`) rather than 72 bespoke integrations — see Known
-gaps below.
+item, `impressions`/`shares` on post metrics, and deeper audit/signal checks). Phase 15
+adds 10 more resale/marketplace platforms (108 → 118) plus a `get_content_calendar`
+tool/dashboard card. The 82 generic-stub platforms route through a single generic stub
+adapter (`src/distribution/genericAdapter.ts`) rather than bespoke integrations — see
+Known gaps below.
 
 ## Services
 
@@ -26,7 +29,7 @@ gaps below.
 |---|---|
 | `src/content-engine` | Generates platform-tailored post copy + images/videos (DeepSeek + fal.ai). `connectedPlatforms()` determines which platforms a business posts to; `queueWeeklyContent` and `queueReviewTriggeredContent` (Phase 4) both fan out per-platform. TikTok/YouTube route through `generateVideo()` (fal.ai kling-video text-to-video) instead of the static-image path. Phase 9 adds SEO-optimized hashtag generation (`generateHashtags`, for platforms whose brief calls for hashtags), multi-language translation (`translateCaption`, driven by `business.preferred_language`), and sentiment-aware tone adjustment for review-triggered copy (`sentimentTone`, driven by the triggering review's star rating). Phase 11 adds AI-generated image alt text for accessibility/SEO, trending-idea seeding to keep weekly content topical, and AI-drafted review-reply suggestions (`review.suggested_reply`). Phase 12 adds a second caption variant per post (`generatePost`'s `captionVariantB`, stored as `content_item.caption_variant_b`), a generic `PLATFORM_BRIEF` fallback for the 72 new platforms with no distinct copy needs, and 12 more standalone AI capabilities in `src/content-engine/capabilities.ts` (emoji-density tuning, CTA-line generation, headline generation, A/B subject lines, local-SEO keyword suggestions, accessibility trimming, posting-time suggestions, differentiation-angle suggestions, FAQ-snippet generation, urgency-phrase generation, long-form expansion for blog-style platforms, and review-reply tone refinement). |
 | `src/approval` | Sends SMS (Twilio) or email and parses content YES/NO/EDIT replies (`index.ts`/`sms.ts`/`email.ts`) and boost BOOST YES/NO replies (`boost.ts`). |
-| `src/distribution` | Posts approved content across all 108 connected platforms. Each of the original 36 platforms' API calls is isolated behind its own adapter (`gbp.ts`, `meta.ts`, `pinterest.ts`, `twitter.ts`, `linkedin.ts`, `threads.ts`, `yelp.ts`, `nextdoor.ts`, `snapchat.ts`, `tiktok.ts`, `youtube.ts`, `whatsapp.ts`, `reddit.ts`, `bluesky.ts`, `mastodon.ts`, `tumblr.ts`, `wechat.ts`, `telegram.ts`, `discord.ts`, `medium.ts`, `vk.ts`, `line.ts`, `vimeo.ts`, `flickr.ts`, `foursquare.ts`, `bing.ts`, `applebusiness.ts`, `houzz.ts`, `angi.ts`, `thumbtack.ts`, `tripadvisor.ts`, `opentable.ts`, `quora.ts`, `trustpilot.ts`, `yandex.ts`); the 72 Phase 12 platforms route through a single generic stub adapter (`genericAdapter.ts`, `createGenericAdapter`/`genericAdapters`) instead. `index.ts` dispatches per item per platform, falling back to `genericAdapters` for any platform without an explicit adapter. |
+| `src/distribution` | Posts approved content across all 118 connected platforms. Each of the original 36 platforms' API calls is isolated behind its own adapter (`gbp.ts`, `meta.ts`, `pinterest.ts`, `twitter.ts`, `linkedin.ts`, `threads.ts`, `yelp.ts`, `nextdoor.ts`, `snapchat.ts`, `tiktok.ts`, `youtube.ts`, `whatsapp.ts`, `reddit.ts`, `bluesky.ts`, `mastodon.ts`, `tumblr.ts`, `wechat.ts`, `telegram.ts`, `discord.ts`, `medium.ts`, `vk.ts`, `line.ts`, `vimeo.ts`, `flickr.ts`, `foursquare.ts`, `bing.ts`, `applebusiness.ts`, `houzz.ts`, `angi.ts`, `thumbtack.ts`, `tripadvisor.ts`, `opentable.ts`, `quora.ts`, `trustpilot.ts`, `yandex.ts`); the 82 generic-stub platforms (72 from Phase 12, 10 more added in Phase 15) route through a single generic stub adapter (`genericAdapter.ts`, `createGenericAdapter`/`genericAdapters`) instead. `index.ts` dispatches per item per platform, falling back to `genericAdapters` for any platform without an explicit adapter. |
 | `src/performance` | Polls each connected platform's insights/analytics API for posted items. |
 | `src/content-analytics` | Ranks a business's posted content by an engagement score (`rankContentPerformance`) and compares the top vs. bottom performers across media type, surface, platform, caption length, posting time, hashtag/emoji use, and A/B caption variant (`diffAttributes`), turning the significant differences into plain-language guidance on what to focus on next (`analyzeContentPerformance`) — answers "why did this post outperform that one, and what should I make more of." |
 | `src/trigger-engine` | Evaluates posted content against a views/engagement threshold and prompts the owner to approve a paid boost (Phase 3). |
@@ -82,7 +85,9 @@ insights back into content generation.
   (4) today, since `reach-integration/index.ts` only queues content for positive reviews —
   the "matter-of-fact" branch for lower ratings is unreachable in practice but kept as a
   safe default in case that filter changes.
-- `src/distribution/gbp.ts` targets the legacy Local Posts endpoint as a placeholder.
+- `src/distribution/gbp.ts` targets the legacy Local Posts endpoint as a placeholder,
+  and now refreshes its access token from `gbp_refresh_token` on every call (mirroring
+  `youtube.ts`'s pattern) instead of relying on a long-dead stored access token.
   Confirm the current Business Profile API surface once GBP API access is granted
   (this has external approval lead time, same as Google Ads developer token approval).
 - Meta/Google Ads campaigns are launched in `PAUSED` status by design — nothing spends
@@ -125,7 +130,8 @@ insights back into content generation.
   the Instagram Graph token even though both are Meta products — don't assume
   `fb_page_access_token` works for Threads calls.
 - WhatsApp (`whatsapp.ts`) has no public feed concept, so "posting" is a broadcast
-  message to the business's existing opt-in customer list via the Cloud API; insights
+  message to a single operator-configured `whatsapp_broadcast_recipient` (there's no
+  customer opt-in/consent-list table yet — set via `set_platform_credentials`); insights
   return zeros until a delivery/read status-webhook ingestion path is built.
 - Reddit (`reddit.ts`) posts to a single configured subreddit per business — this
   assumes the business (or its agency account) already has posting permissions
@@ -157,7 +163,9 @@ insights back into content generation.
   by exact/substring Places id comparison (or name fallback for rank); this is a
   best-effort heuristic and may mis-rank or mis-flag for businesses with very common
   names or unconfirmed GBP listings.
-- The 72 Phase 12 platforms (Weibo, Xiaohongshu, Douyin, KakaoTalk, Signal, Viber,
+- The 82 generic-stub platforms (72 from Phase 12 plus Shopee, Lazada, MercadoLibre,
+  Rakuten, AliExpress, Wish, Depop, Poshmark, Vinted, and Snapdeal from Phase 15) —
+  e.g. Weibo, Xiaohongshu, Douyin, KakaoTalk, Signal, Viber,
   Slack, Substack, WordPress, Etsy, Shopify, DoorDash, Airbnb, Waze, and the rest —
   see `src/distribution/genericAdapter.ts`) are real platforms, but no bespoke API
   integration has been built or confirmed for any of them yet. Rather than guess at

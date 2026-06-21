@@ -12,7 +12,7 @@ import { trackRank } from "../rank-tracker/index.js";
 import { captureSentimentTrend } from "../sentiment-tracker/index.js";
 import { checkDuplicateListings } from "../duplicate-listing-check/index.js";
 import { syncListingInfo } from "../listings/index.js";
-import { analyzeContentPerformance, flagTrendingContent, predictDraftScore } from "../content-analytics/index.js";
+import { analyzeContentPerformance, flagTrendingContent, predictDraftScore, getContentCalendar } from "../content-analytics/index.js";
 import type { AgentActionRiskLevel, AgentActionSource, Business, ContentItem, Platform } from "../types.js";
 
 /** Phase 8.10: the doc's tool-calling intent router (§15) — discrete,
@@ -37,7 +37,8 @@ export type ToolName =
   | "sync_listing_info"
   | "analyze_content_performance"
   | "flag_trending_content"
-  | "predict_draft_score";
+  | "predict_draft_score"
+  | "get_content_calendar";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -130,6 +131,13 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
     approvalRequired: false,
     run: (b) => getPendingApprovals(b.id),
     preview: (b) => getPendingApprovals(b.id),
+  },
+  get_content_calendar: {
+    description: "Everything queued, approved, or edited but not yet posted, oldest-due first.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: (b) => getContentCalendar(b.id),
+    preview: (b) => getContentCalendar(b.id),
   },
   // Read tools above never have side effects, so their dry-run preview is
   // identical to a real call — there is nothing to defer.

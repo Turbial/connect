@@ -119,6 +119,16 @@ const REGISTRY: Record<string, { idField: string; tokenField: string }> = {
   tmall: { idField: "tmall_id", tokenField: "tmall_access_token" },
   ebay: { idField: "ebay_id", tokenField: "ebay_access_token" },
   naverblog: { idField: "naverblog_id", tokenField: "naverblog_access_token" },
+  shopee: { idField: "shopee_id", tokenField: "shopee_access_token" },
+  lazada: { idField: "lazada_id", tokenField: "lazada_access_token" },
+  mercadolibre: { idField: "mercadolibre_id", tokenField: "mercadolibre_access_token" },
+  rakuten: { idField: "rakuten_id", tokenField: "rakuten_access_token" },
+  aliexpress: { idField: "aliexpress_id", tokenField: "aliexpress_access_token" },
+  wish: { idField: "wish_id", tokenField: "wish_access_token" },
+  depop: { idField: "depop_id", tokenField: "depop_access_token" },
+  poshmark: { idField: "poshmark_id", tokenField: "poshmark_access_token" },
+  vinted: { idField: "vinted_id", tokenField: "vinted_access_token" },
+  snapdeal: { idField: "snapdeal_id", tokenField: "snapdeal_access_token" },
 };
 
 /** One generic stub adapter per Phase 12 platform, keyed by platform name. */

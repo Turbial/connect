@@ -270,6 +270,24 @@ el("syncListingInfoBtn").addEventListener("click", async () => {
   }
 });
 
+function renderCalendar(entries) {
+  if (!entries || entries.length === 0) return el("calendarCard").textContent = "Nothing queued.";
+  const rows = entries
+    .map((e) => `<tr><td>${e.status}</td><td>${e.platforms.join(", ")}</td><td>${e.caption.slice(0, 60)}</td><td>${e.createdAt}</td></tr>`)
+    .join("");
+  el("calendarCard").innerHTML = `<table>${rows}</table>`;
+}
+
+el("loadCalendarBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("get_content_calendar");
+    renderCalendar(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
 el("predictDraftScoreBtn").addEventListener("click", async () => {
   showError("");
   const contentItemId = el("draftContentItemId").value.trim();
