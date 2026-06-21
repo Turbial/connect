@@ -56,9 +56,21 @@ async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknow
  * catalog (`GET /tools`) and call a tool (`POST /tools/:name`) against a
  * specific business, with the exact same dry-run/approval/audit-log
  * behavior `callTool` already enforces for every other caller. */
+/** Strips a configured base path prefix (e.g. CONNECT_BASE_PATH=/api, for a
+ * reverse proxy that forwards the full path instead of stripping it before
+ * proxying) so routing/static lookups always see the same paths they'd see
+ * if served from the domain root. No-op when CONNECT_BASE_PATH is unset. */
+export function stripBasePath(path: string): string {
+  const basePath = process.env.CONNECT_BASE_PATH?.replace(/\/+$/, "");
+  if (!basePath) return path;
+  if (path === basePath) return "/";
+  if (path.startsWith(`${basePath}/`)) return path.slice(basePath.length);
+  return path;
+}
+
 export async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const method = req.method ?? "GET";
-  const path = req.url ?? "/";
+  const path = stripBasePath(req.url ?? "/");
 
   if (method === "GET") {
     const staticFile = staticFileFor(path);

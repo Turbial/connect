@@ -1,3 +1,9 @@
+/** Resolves API calls relative to wherever this dashboard is actually
+ * served from (e.g. https://host/api/) instead of hardcoding root-relative
+ * paths, which break the moment the dashboard is deployed behind a reverse
+ * proxy that maps a subpath (like /api/) to this service. */
+const BASE_PATH = new URL(".", window.location.href).href;
+
 const state = {
   apiKey: localStorage.getItem("connect_api_key") || "",
   businessId: localStorage.getItem("connect_business_id") || "",
@@ -15,7 +21,7 @@ function showError(message) {
 }
 
 async function callTool(name, { dryRun = false, ...input } = {}) {
-  const res = await fetch(`/tools/${name}`, {
+  const res = await fetch(new URL(`tools/${name}`, BASE_PATH), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -32,7 +38,7 @@ async function callTool(name, { dryRun = false, ...input } = {}) {
 }
 
 async function getCredentialFields(platform) {
-  const res = await fetch(`/platforms/${platform}/credential-fields`, {
+  const res = await fetch(new URL(`platforms/${platform}/credential-fields`, BASE_PATH), {
     headers: { Authorization: `Bearer ${state.apiKey}` },
   });
   const body = await res.json().catch(() => ({}));
@@ -442,7 +448,7 @@ function showOnboardingError(message) {
 async function apiFetch(path, { method = "GET", apiKey, body } = {}) {
   const headers = { Authorization: `Bearer ${apiKey}` };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const res = await fetch(path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+  const res = await fetch(new URL(path, BASE_PATH), { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
   const responseBody = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(responseBody?.error || `Request failed (${res.status})`);
   return responseBody;
@@ -461,7 +467,7 @@ el("createBusinessBtn").addEventListener("click", async () => {
     return;
   }
   try {
-    const body = await apiFetch("/businesses", {
+    const body = await apiFetch("businesses", {
       method: "POST",
       apiKey,
       body: {
@@ -495,7 +501,7 @@ el("sendVerificationBtn").addEventListener("click", async () => {
     return;
   }
   try {
-    await apiFetch(`/businesses/${businessId}/owner-verification/send`, { method: "POST", apiKey });
+    await apiFetch(`businesses/${businessId}/owner-verification/send`, { method: "POST", apiKey });
     el("verificationResult").textContent = "Code sent — check the owner's phone.";
   } catch (err) {
     showOnboardingError(err.message);
@@ -512,7 +518,7 @@ el("confirmVerificationBtn").addEventListener("click", async () => {
     return;
   }
   try {
-    const body = await apiFetch(`/businesses/${businessId}/owner-verification/confirm`, {
+    const body = await apiFetch(`businesses/${businessId}/owner-verification/confirm`, {
       method: "POST",
       apiKey,
       body: { code },
