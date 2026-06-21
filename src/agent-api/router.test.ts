@@ -64,4 +64,11 @@ describe("isKnownToolName", () => {
   it("rejects an unregistered name", () => {
     expect(isKnownToolName("delete_everything")).toBe(false);
   });
+
+  it("accepts tools added in later phases, not just the original 8", () => {
+    expect(isKnownToolName("add_competitor")).toBe(true);
+    expect(isKnownToolName("track_rank")).toBe(true);
+    expect(isKnownToolName("flag_trending_content")).toBe(true);
+    expect(isKnownToolName("get_revenue_by_platform")).toBe(true);
+  });
 });

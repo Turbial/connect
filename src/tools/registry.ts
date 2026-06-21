@@ -322,6 +322,14 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
   },
 };
 
+/** Single source of truth for "is this a real tool name" — anything routing
+ * a tool call (the agent API, MCP server, etc.) should check this instead of
+ * hand-maintaining its own allowlist, which inevitably drifts out of sync as
+ * tools are added here. */
+export function isToolName(name: string): name is ToolName {
+  return name in TOOLS;
+}
+
 /** Phase 10: the tool catalog an external agent (e.g. Claude, via the agent
  * API) discovers before calling anything — name/description/risk/approval
  * only, never the implementation, so a new tool can't be exposed by accident. */

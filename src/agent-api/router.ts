@@ -1,4 +1,4 @@
-import type { ToolName } from "../tools/registry.js";
+import { isToolName, type ToolName } from "../tools/registry.js";
 
 const TOOL_NAME_RE = /^[a-z_]+$/;
 
@@ -45,17 +45,6 @@ export function matchRoute(method: string, path: string): Route | null {
   return null;
 }
 
-const KNOWN_TOOL_NAMES: ToolName[] = [
-  "get_operator_snapshot",
-  "get_visibility_score",
-  "get_connection_health",
-  "get_pending_approvals",
-  "queue_content",
-  "propose_boost",
-  "run_visibility_audit",
-  "set_platform_credentials",
-];
-
 export function isKnownToolName(name: string): name is ToolName {
-  return (KNOWN_TOOL_NAMES as string[]).includes(name);
+  return isToolName(name);
 }
