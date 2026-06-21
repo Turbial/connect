@@ -190,6 +190,55 @@ td, th {
   color: #9aa3b2;
 }
 
+.steps {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  background: #1a1d23;
+  color: #9aa3b2;
+  font-size: 0.85rem;
+}
+
+.step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: #262a33;
+  color: #9aa3b2;
+  font-size: 0.8rem;
+}
+
+.step.active {
+  color: white;
+  background: #1f2733;
+}
+
+.step.active .step-num {
+  background: #2f6feb;
+  color: white;
+}
+
+.step.done .step-num {
+  background: #18402a;
+  color: #6fe3a1;
+}
+
+.step.disabled {
+  opacity: 0.5;
+}
+
 .nav {
   display: flex;
   gap: 0.25rem;
