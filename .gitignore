@@ -2,3 +2,7 @@ node_modules/
 dist/
 .env
 *.log
+
+# Built by `npm run build` (vite build --outDir src/agent-api/public);
+# the frontend source of truth lives in frontend/, not here.
+/src/agent-api/public/*

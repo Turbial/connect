@@ -121,3 +121,28 @@ td, th {
 .tag.ok { background: #18402a; color: #6fe3a1; }
 .tag.warn { background: #463418; color: #e3c36f; }
 .tag.bad { background: #402020; color: #e36f6f; }
+
+.nav {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid #2a2d34;
+}
+
+.nav a {
+  color: #9aa3b2;
+  text-decoration: none;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.nav a:hover {
+  background: #1a1d23;
+}
+
+.nav a.active {
+  background: #2f6feb;
+  color: white;
+}

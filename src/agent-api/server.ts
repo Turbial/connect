@@ -17,12 +17,13 @@ const PUBLIC_DIR = fileURLToPath(new URL("./public", import.meta.url));
 /** Serves the operator dashboard's static assets — unauthenticated, since the
  * dashboard itself holds no data; every API call it makes still requires the
  * bearer token entered into its own login field. */
-async function serveStaticFile(res: ServerResponse, fileName: string): Promise<void> {
+async function serveStaticFile(res: ServerResponse, fileName: string): Promise<boolean> {
   try {
     const contents = await readFile(`${PUBLIC_DIR}/${fileName}`);
     res.writeHead(200, { "Content-Type": contentTypeFor(fileName) }).end(contents);
+    return true;
   } catch {
-    res.writeHead(404).end();
+    return false;
   }
 }
 
@@ -75,8 +76,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
 
   if (method === "GET") {
     const staticFile = staticFileFor(path);
-    if (staticFile) {
-      await serveStaticFile(res, staticFile);
+    // Static files now resolve generically (Vite emits hashed asset names),
+    // so a path that *looks* like an asset but is actually an API route
+    // (e.g. /tools) must fall through to route matching below rather than
+    // 404ing outright when no matching file exists on disk.
+    if (staticFile && (await serveStaticFile(res, staticFile))) {
       return;
     }
   }
