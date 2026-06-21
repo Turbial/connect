@@ -32,4 +32,18 @@ describe("hasFeature", () => {
     expect(hasFeature(business, "multi_location_rollup")).toBe(true);
     expect(hasFeature(business, "boost_proposals")).toBe(true);
   });
+
+  it("growth_operator and vertical_pro add the agent action queue but not multi-location/white-label", () => {
+    for (const tier of ["growth_operator", "vertical_pro"] as const) {
+      const business = businessWithTier(tier);
+      expect(hasFeature(business, "agent_action_queue")).toBe(true);
+      expect(hasFeature(business, "multi_location_rollup")).toBe(false);
+      expect(hasFeature(business, "white_label_reports")).toBe(false);
+    }
+  });
+
+  it("local_operator does not include the agent action queue", () => {
+    const business = businessWithTier("local_operator");
+    expect(hasFeature(business, "agent_action_queue")).toBe(false);
+  });
 });

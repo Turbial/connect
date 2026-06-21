@@ -42,3 +42,25 @@ export async function runSeoAudit(business: Business): Promise<{ score: number; 
 
   return { score, issues };
 }
+
+export interface SeoAuditHistoryEntry {
+  score: number;
+  issues: string[];
+  runAt: string;
+}
+
+/** Every SEO audit ever run for a business, oldest first, so the dashboard
+ * can chart score trend rather than only show the latest run. */
+export async function getSeoAuditHistory(businessId: string, limit = 50): Promise<SeoAuditHistoryEntry[]> {
+  const { data, error } = await supabase
+    .from("seo_audit")
+    .select("*")
+    .eq("business_id", businessId)
+    .order("run_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+
+  return ((data ?? []) as { score: number; issues: string[]; run_at: string }[])
+    .map((row) => ({ score: row.score, issues: row.issues, runAt: row.run_at }))
+    .reverse();
+}

@@ -1,21 +1,29 @@
 import { supabase } from "../lib/supabase.js";
 import { logAgentAction } from "../lib/agentAction.js";
+import { getRecentAgentActions } from "../lib/agentAction.js";
 import { buildOperatorSnapshot, getPendingApprovals } from "../lib/operatorSnapshot.js";
-import { getLatestVisibilityScore, computeVisibilityScore, getVisibilityScoreHistory } from "../visibility-score/index.js";
+import { getLatestVisibilityScore, computeVisibilityScore, getVisibilityScoreHistory, getOrgVisibilityRollup, getVerticalBenchmark } from "../visibility-score/index.js";
 import { getConnectionSummary } from "../lib/platformConnection.js";
 import { setPlatformCredentials } from "../lib/platformCredentials.js";
 import { queueWeeklyContent } from "../content-engine/index.js";
-import { evaluateBoostTriggers } from "../trigger-engine/index.js";
-import { runSeoAudit } from "../seo-audit/index.js";
-import { addCompetitor, captureCompetitorSnapshots, getTrackedCompetitors } from "../competitor-monitor/index.js";
+import { evaluateBoostTriggers, getBoostHistory } from "../trigger-engine/index.js";
+import { runSeoAudit, getSeoAuditHistory } from "../seo-audit/index.js";
+import { addCompetitor, captureCompetitorSnapshots, getTrackedCompetitors, getCompetitorComparison } from "../competitor-monitor/index.js";
 import { getRevenueByPlatform } from "../lib/leadEvents.js";
-import { trackRank } from "../rank-tracker/index.js";
+import { trackRank, getRankHistory } from "../rank-tracker/index.js";
 import { captureSentimentTrend } from "../sentiment-tracker/index.js";
 import { checkDuplicateListings } from "../duplicate-listing-check/index.js";
 import { syncListingInfo } from "../listings/index.js";
 import { analyzeContentPerformance, flagTrendingContent, predictDraftScore, getContentCalendar, getPlatformBreakdown, getPublishedPostStatus } from "../content-analytics/index.js";
 import { postContentItemNow, type ManualPostInput } from "../distribution/index.js";
+import { hasFeature } from "../lib/packages.js";
 import type { AgentActionRiskLevel, AgentActionSource, Business, ContentItem, Platform } from "../types.js";
+
+function requireFeature(business: Business, feature: Parameters<typeof hasFeature>[1]): void {
+  if (!hasFeature(business, feature)) {
+    throw new Error(`This business's package does not include the "${feature}" feature.`);
+  }
+}
 
 function toManualPostInput(input: Record<string, unknown>): ManualPostInput {
   const caption = input.caption;
@@ -60,7 +68,14 @@ export type ToolName =
   | "get_tracked_competitors"
   | "get_revenue_by_platform"
   | "get_post_status"
-  | "post_content_now";
+  | "post_content_now"
+  | "get_boost_history"
+  | "get_rank_history"
+  | "get_seo_audit_history"
+  | "get_competitor_comparison"
+  | "get_org_visibility_rollup"
+  | "get_vertical_benchmark"
+  | "get_agent_action_queue";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -350,6 +365,77 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
     preview: async (b, input) => {
       const draftItem = await fetchContentItem(b.id, input.contentItemId as string | undefined);
       return predictDraftScore(b, draftItem);
+    },
+  },
+  get_boost_history: {
+    description: "Every boost ever proposed for this business — declined and launched alike — newest first.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: (b) => getBoostHistory(b.id),
+    preview: (b) => getBoostHistory(b.id),
+  },
+  get_rank_history: {
+    description: "Every local search rank snapshot ever captured for this business, oldest first, for charting trend.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: (b) => getRankHistory(b.id),
+    preview: (b) => getRankHistory(b.id),
+  },
+  get_seo_audit_history: {
+    description: "Every SEO/citation audit ever run for this business, oldest first, for charting score trend.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: (b) => getSeoAuditHistory(b.id),
+    preview: (b) => getSeoAuditHistory(b.id),
+  },
+  get_competitor_comparison: {
+    description: "This business's visibility score and average review rating side-by-side with each tracked competitor's latest snapshot.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: (b) => getCompetitorComparison(b),
+    preview: (b) => getCompetitorComparison(b),
+  },
+  get_org_visibility_rollup: {
+    description:
+      "Multi-location visibility score rollup across every business in this business's organization, ranked best to worst. Requires the agency/franchise package tier.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b) => {
+      requireFeature(b, "multi_location_rollup");
+      if (!b.organization_id) throw new Error("This business has no organization to roll up.");
+      return getOrgVisibilityRollup(b.organization_id);
+    },
+    preview: async (b) => {
+      requireFeature(b, "multi_location_rollup");
+      if (!b.organization_id) throw new Error("This business has no organization to roll up.");
+      return getOrgVisibilityRollup(b.organization_id);
+    },
+  },
+  get_vertical_benchmark: {
+    description:
+      "How this business's visibility score compares to other businesses in the same industry vertical. Requires the vertical_scoring feature.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b) => {
+      requireFeature(b, "vertical_scoring");
+      return getVerticalBenchmark(b.vertical ?? "general", b.id);
+    },
+    preview: async (b) => {
+      requireFeature(b, "vertical_scoring");
+      return getVerticalBenchmark(b.vertical ?? "general", b.id);
+    },
+  },
+  get_agent_action_queue: {
+    description: "Recent automated/agent actions taken for this business, with risk level and approval status. Requires the agent_action_queue feature.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b) => {
+      requireFeature(b, "agent_action_queue");
+      return getRecentAgentActions(b.id);
+    },
+    preview: async (b) => {
+      requireFeature(b, "agent_action_queue");
+      return getRecentAgentActions(b.id);
     },
   },
 };

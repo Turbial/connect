@@ -607,6 +607,125 @@ el("confirmVerificationBtn").addEventListener("click", async () => {
   }
 });
 
+function renderBoostHistory(entries) {
+  if (!entries || entries.length === 0) return el("boostHistoryCard").textContent = "No boosts proposed yet.";
+  const rows = entries
+    .map(
+      (e) =>
+        `<tr><td>${escapeHtml(e.platform)}</td><td>${escapeHtml(e.ownerResponse ?? "pending")}</td><td>${escapeHtml(e.adPlatform ?? "")}</td><td>${escapeHtml(e.thresholdMetAt)}</td></tr>`
+    )
+    .join("");
+  el("boostHistoryCard").innerHTML = `<table><tr><th>Platform</th><th>Response</th><th>Ad platform</th><th>Triggered at</th></tr>${rows}</table>`;
+}
+
+el("loadBoostHistoryBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("get_boost_history");
+    renderBoostHistory(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+function renderRankHistory(entries) {
+  if (!entries || entries.length === 0) return el("rankHistoryCard").textContent = "No rank snapshots captured yet.";
+  const chart = barChart(entries.map((e) => ({ label: e.keyword, value: e.rank ?? 0 })));
+  const rows = entries.map((e) => `<tr><td>${escapeHtml(e.keyword)}</td><td>${e.rank ?? "unranked"}</td><td>${escapeHtml(e.capturedAt)}</td></tr>`).join("");
+  el("rankHistoryCard").innerHTML = `${chart}<table><tr><th>Keyword</th><th>Rank</th><th>Captured at</th></tr>${rows}</table>`;
+}
+
+el("loadRankHistoryBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("get_rank_history");
+    renderRankHistory(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+function renderSeoAuditHistory(entries) {
+  if (!entries || entries.length === 0) return el("seoAuditHistoryCard").textContent = "No SEO audits run yet.";
+  const chart = barChart(entries.map((e, i) => ({ label: `#${i + 1}`, value: e.score })));
+  const rows = entries.map((e) => `<tr><td>${e.score}</td><td>${escapeHtml(e.issues.join("; "))}</td><td>${escapeHtml(e.runAt)}</td></tr>`).join("");
+  el("seoAuditHistoryCard").innerHTML = `${chart}<table><tr><th>Score</th><th>Issues</th><th>Run at</th></tr>${rows}</table>`;
+}
+
+el("loadSeoAuditHistoryBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("get_seo_audit_history");
+    renderSeoAuditHistory(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+function renderCompetitorComparison(comparison) {
+  const rows = comparison.competitors
+    .map((c) => `<tr><td>${escapeHtml(c.name)}</td><td>${c.rating ?? "—"}</td><td>${c.reviewCount ?? "—"}</td></tr>`)
+    .join("");
+  el("competitorComparisonCard").innerHTML =
+    `<p>Our visibility score: <strong>${comparison.ownVisibilityScore ?? "—"}</strong> | Our avg rating: <strong>${comparison.ownAvgRating ?? "—"}</strong></p>` +
+    `<table><tr><th>Competitor</th><th>Rating</th><th>Reviews</th></tr>${rows}</table>`;
+}
+
+el("loadCompetitorComparisonBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("get_competitor_comparison");
+    renderCompetitorComparison(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+function renderOrgRollup(rollup) {
+  const rows = rollup.locations
+    .map((l) => `<tr><td>${escapeHtml(l.businessName)}</td><td>${l.score ?? "—"}</td></tr>`)
+    .join("");
+  el("orgRollupCard").innerHTML = `<table><tr><th>Location</th><th>Score</th></tr>${rows}</table>`;
+}
+
+el("loadOrgRollupBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("get_org_visibility_rollup");
+    renderOrgRollup(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+el("loadVerticalBenchmarkBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("get_vertical_benchmark");
+    el("verticalBenchmarkCard").textContent = output ? JSON.stringify(output) : "Not enough vertical data yet.";
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+function renderAgentActionQueue(actions) {
+  if (!actions || actions.length === 0) return el("agentActionQueueCard").textContent = "No agent actions recorded yet.";
+  const rows = actions
+    .map((a) => `<tr><td>${escapeHtml(a.tool)}</td><td>${escapeHtml(a.status)}</td><td>${escapeHtml(a.risk_level)}</td><td>${escapeHtml(a.created_at ?? "")}</td></tr>`)
+    .join("");
+  el("agentActionQueueCard").innerHTML = `<table><tr><th>Tool</th><th>Status</th><th>Risk</th><th>At</th></tr>${rows}</table>`;
+}
+
+el("loadAgentActionQueueBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("get_agent_action_queue");
+    renderAgentActionQueue(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
 if (state.apiKey && state.businessId) {
   loadSnapshot();
 }

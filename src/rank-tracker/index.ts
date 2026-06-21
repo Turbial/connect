@@ -45,3 +45,25 @@ export async function trackRank(business: Business, keyword: string): Promise<{ 
 
   return { rank };
 }
+
+export interface RankHistoryEntry {
+  keyword: string;
+  rank: number | null;
+  capturedAt: string;
+}
+
+/** Every rank snapshot ever captured for a business, oldest first, so the
+ * dashboard can chart a trend rather than only show the latest point. */
+export async function getRankHistory(businessId: string, limit = 50): Promise<RankHistoryEntry[]> {
+  const { data, error } = await supabase
+    .from("rank_snapshot")
+    .select("*")
+    .eq("business_id", businessId)
+    .order("captured_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+
+  return ((data ?? []) as { keyword: string; rank: number | null; captured_at: string }[])
+    .map((row) => ({ keyword: row.keyword, rank: row.rank, capturedAt: row.captured_at }))
+    .reverse();
+}

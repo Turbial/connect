@@ -29,17 +29,18 @@ const LOCAL_OPERATOR_FEATURES: PackageFeature[] = [
   "vertical_scoring",
 ];
 
-/** Placeholder tiers default to Local Operator's feature set until their
- * Phase 7/8 features (A/B testing, multi-location, agency white-label, agent
- * action queue) ship and get added here explicitly — never silently grant a
- * feature a tier hasn't earned yet. */
+const GROWTH_TIER_FEATURES: PackageFeature[] = [...LOCAL_OPERATOR_FEATURES, "agent_action_queue"];
+
+/** Agency/Franchise are the only tiers with multiple locations to roll up
+ * and a brand to white-label reports under — those two features stay scoped
+ * to them; never silently grant a feature a tier hasn't earned yet. */
 const PACKAGE_FEATURES: Record<PackageTier, PackageFeature[]> = {
   starter_audit: STARTER_AUDIT_FEATURES,
   local_operator: LOCAL_OPERATOR_FEATURES,
-  growth_operator: LOCAL_OPERATOR_FEATURES,
-  vertical_pro: LOCAL_OPERATOR_FEATURES,
-  agency: [...LOCAL_OPERATOR_FEATURES, "multi_location_rollup", "white_label_reports"],
-  franchise: [...LOCAL_OPERATOR_FEATURES, "multi_location_rollup", "white_label_reports"],
+  growth_operator: GROWTH_TIER_FEATURES,
+  vertical_pro: GROWTH_TIER_FEATURES,
+  agency: [...GROWTH_TIER_FEATURES, "multi_location_rollup", "white_label_reports"],
+  franchise: [...GROWTH_TIER_FEATURES, "multi_location_rollup", "white_label_reports"],
 };
 
 /** A business with no package_tier set behaves as Starter Audit — the most

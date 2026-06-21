@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase.js";
+import { getLatestVisibilityScore } from "../visibility-score/index.js";
 import type { Business, Competitor, CompetitorSnapshot } from "../types.js";
 
 /**
@@ -82,4 +83,38 @@ export async function getTrackedCompetitors(businessId: string): Promise<Competi
     results.push({ ...competitor, latestSnapshot: snapshots?.[0] ?? null });
   }
   return results;
+}
+
+export interface CompetitorComparison {
+  ownVisibilityScore: number | null;
+  ownAvgRating: number | null;
+  competitors: { name: string; rating: number | null; reviewCount: number | null }[];
+}
+
+/** Puts the business's own visibility score and average review rating
+ * side-by-side with each tracked competitor's latest snapshot, so the owner
+ * can see at a glance how they stack up rather than reading two separate
+ * cards. */
+export async function getCompetitorComparison(business: Business): Promise<CompetitorComparison> {
+  const [visibilityScore, sentiment, competitors] = await Promise.all([
+    getLatestVisibilityScore(business.id),
+    supabase
+      .from("sentiment_trend")
+      .select("avg_rating")
+      .eq("business_id", business.id)
+      .order("period_end", { ascending: false })
+      .limit(1),
+    getTrackedCompetitors(business.id),
+  ]);
+  if (sentiment.error) throw sentiment.error;
+
+  return {
+    ownVisibilityScore: visibilityScore?.score ?? null,
+    ownAvgRating: (sentiment.data?.[0] as { avg_rating: number } | undefined)?.avg_rating ?? null,
+    competitors: competitors.map((c) => ({
+      name: c.name,
+      rating: c.latestSnapshot?.rating ?? null,
+      reviewCount: c.latestSnapshot?.review_count ?? null,
+    })),
+  };
 }

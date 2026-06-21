@@ -16,6 +16,13 @@ describe("getToolCatalog", () => {
     expect(names).toContain("sync_listing_info");
     expect(names).toContain("analyze_content_performance");
     expect(names).toContain("post_content_now");
+    expect(names).toContain("get_boost_history");
+    expect(names).toContain("get_rank_history");
+    expect(names).toContain("get_seo_audit_history");
+    expect(names).toContain("get_competitor_comparison");
+    expect(names).toContain("get_org_visibility_rollup");
+    expect(names).toContain("get_vertical_benchmark");
+    expect(names).toContain("get_agent_action_queue");
 
     // Implementation details (run/preview functions) must never leak into the catalog.
     for (const entry of catalog) {

@@ -10,6 +10,57 @@ import { logAgentAction } from "../lib/agentAction.js";
 import { flagTrendingContent } from "../content-analytics/index.js";
 import type { AdPlatform, Business, BoostTrigger, Organization, Post } from "../types.js";
 
+export interface BoostHistoryEntry {
+  boostTriggerId: string;
+  postId: string;
+  platform: Post["platform"];
+  thresholdMetAt: string;
+  ownerResponse: string | null;
+  respondedAt: string | null;
+  adPlatform: AdPlatform | null;
+  adCampaignId: string | null;
+  budgetCents: number | null;
+}
+
+/** Every boost ever proposed for a business, not just the ones still
+ * pending an owner reply — declined and launched alike — newest first, so
+ * an operator can see the full history instead of only today's queue. */
+export async function getBoostHistory(businessId: string): Promise<BoostHistoryEntry[]> {
+  const { data: itemIds, error: itemsError } = await supabase.from("content_item").select("id").eq("business_id", businessId);
+  if (itemsError) throw itemsError;
+
+  const { data: posts, error: postsError } = await supabase
+    .from("post")
+    .select("*")
+    .in("content_item_id", (itemIds ?? []).map((i) => i.id));
+  if (postsError) throw postsError;
+  const businessPosts = (posts ?? []) as Post[];
+  if (businessPosts.length === 0) return [];
+
+  const { data: triggers, error: triggersError } = await supabase
+    .from("boost_trigger")
+    .select("*")
+    .in("post_id", businessPosts.map((p) => p.id))
+    .order("threshold_met_at", { ascending: false });
+  if (triggersError) throw triggersError;
+
+  const postById = new Map(businessPosts.map((p) => [p.id, p]));
+
+  return ((triggers ?? []) as BoostTrigger[])
+    .filter((trigger) => postById.has(trigger.post_id))
+    .map((trigger) => ({
+      boostTriggerId: trigger.id,
+      postId: trigger.post_id,
+      platform: postById.get(trigger.post_id)!.platform,
+      thresholdMetAt: trigger.threshold_met_at,
+      ownerResponse: trigger.owner_response,
+      respondedAt: trigger.responded_at,
+      adPlatform: trigger.ad_platform,
+      adCampaignId: trigger.ad_campaign_id,
+      budgetCents: trigger.budget_cents,
+    }));
+}
+
 /** A post earns a boost prompt once it clears either threshold and has no existing boost_trigger. */
 const VIEWS_THRESHOLD = 500;
 const ENGAGEMENT_THRESHOLD = 50;
