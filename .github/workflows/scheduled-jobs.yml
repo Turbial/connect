@@ -1,0 +1,81 @@
+name: Scheduled jobs
+
+on:
+  schedule:
+    # weekly content batch — Monday 13:00 UTC
+    - cron: "0 13 * * 1"
+    # the rest run daily
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Run a single job instead of the full schedule"
+        type: choice
+        options: [weekly, collect, services, connections, visibility-score]
+
+jobs:
+  weekly:
+    if: github.event.schedule == '0 13 * * 1' || github.event.inputs.job == 'weekly'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "npm" }
+      - run: npm ci
+      - run: npm run weekly
+        env: &job-env
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+          REACH_EMAIL_WEBHOOK_URL: ${{ secrets.REACH_EMAIL_WEBHOOK_URL }}
+          APPROVAL_TIMEOUT_HOURS: ${{ secrets.APPROVAL_TIMEOUT_HOURS }}
+
+  collect:
+    if: github.event.schedule == '0 14 * * *' || github.event.inputs.job == 'collect'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "npm" }
+      - run: npm ci
+      - run: npm run collect
+        env: *job-env
+
+  services:
+    if: github.event.schedule == '0 14 * * *' || github.event.inputs.job == 'services'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "npm" }
+      - run: npm ci
+      - run: npm run services
+        env:
+          <<: *job-env
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+
+  connections:
+    if: github.event.schedule == '0 14 * * *' || github.event.inputs.job == 'connections'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "npm" }
+      - run: npm ci
+      - run: npm run connections
+        env: *job-env
+
+  visibility-score:
+    if: github.event.schedule == '0 14 * * *' || github.event.inputs.job == 'visibility-score'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: "npm" }
+      - run: npm ci
+      - run: npm run visibility-score
+        env: *job-env

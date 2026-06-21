@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Connect — Operator Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Connect</h1>
+    <div class="auth-bar" id="authBar">
+      <input id="apiKey" type="password" placeholder="Agent API key" />
+      <input id="businessId" type="text" placeholder="Business ID" />
+      <button id="loadBtn">Load</button>
+      <span id="authStatus"></span>
+    </div>
+    <div class="auth-bar" id="loadedBar" hidden>
+      <span id="loadedAs"></span>
+      <button id="switchBusinessBtn">Switch business</button>
+    </div>
+  </header>
+
+  <main id="onboarding">
+    <section id="onboardingError" class="error" hidden></section>
+    <section class="card">
+      <h2>New business</h2>
+      <p class="muted">Set this business up for the first time, then load it above with the same API key.</p>
+      <div class="row">
+        <input id="newBusinessName" type="text" placeholder="Business name (required)" />
+        <input id="newBusinessLocation" type="text" placeholder="Location" />
+      </div>
+      <div class="row">
+        <input id="newBusinessPhone" type="text" placeholder="Business phone" />
+        <input id="newBusinessOwnerPhone" type="text" placeholder="Owner phone (SMS approvals)" />
+      </div>
+      <div class="row">
+        <input id="newBusinessOwnerEmail" type="text" placeholder="Owner email" />
+        <input id="newBusinessOwnerMobile" type="text" placeholder="Owner mobile (WhatsApp)" />
+      </div>
+      <button id="createBusinessBtn">Create business</button>
+      <div id="createBusinessResult"></div>
+    </section>
+
+    <section class="card">
+      <h2>Owner verification</h2>
+      <p class="muted">Confirms the owner's phone before the weekly content loop will run for them.</p>
+      <button id="sendVerificationBtn">Send code</button>
+      <div class="row">
+        <input id="verificationCode" type="text" placeholder="6-digit code" />
+        <button id="confirmVerificationBtn">Confirm</button>
+      </div>
+      <div id="verificationResult"></div>
+    </section>
+  </main>
+
+  <main id="app" hidden>
+    <section id="error" class="error" hidden></section>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Visibility score</h2>
+        <div id="scoreCard">—</div>
+        <button id="runAuditBtn">Run fresh audit</button>
+      </section>
+
+      <section class="card">
+        <h2>Connections</h2>
+        <div id="connectionsCard">—</div>
+      </section>
+
+      <section class="card">
+        <h2>Pending approvals</h2>
+        <div id="approvalsCard">—</div>
+      </section>
+
+      <section class="card">
+        <h2>Pending boosts</h2>
+        <div id="boostsCard">—</div>
+        <button id="proposeBoostBtn">Evaluate boost triggers</button>
+      </section>
+
+      <section class="card">
+        <h2>Unresolved reviews</h2>
+        <div id="reviewsCard">—</div>
+      </section>
+
+      <section class="card">
+        <h2>Recent agent actions</h2>
+        <div id="actionsCard">—</div>
+      </section>
+
+      <section class="card">
+        <h2>Content</h2>
+        <button id="queueContentBtn">Queue this week's content</button>
+        <div id="queueResult"></div>
+      </section>
+
+      <section class="card">
+        <h2>Content performance</h2>
+        <button id="analyzePerformanceBtn">Analyze what's working</button>
+        <div id="performanceCard"></div>
+      </section>
+
+      <section class="card">
+        <h2>Trending content</h2>
+        <button id="flagTrendingBtn">Check what's trending</button>
+        <div id="trendingCard"></div>
+      </section>
+
+      <section class="card">
+        <h2>SEO audit</h2>
+        <button id="runSeoAuditBtn">Run SEO audit</button>
+        <div id="seoAuditCard"></div>
+      </section>
+
+      <section class="card">
+        <h2>Competitors</h2>
+        <div class="row">
+          <input id="competitorName" type="text" placeholder="Competitor name" />
+          <input id="competitorGbpPlaceId" type="text" placeholder="GBP place id (optional)" />
+        </div>
+        <button id="addCompetitorBtn">Add competitor</button>
+        <button id="captureCompetitorSnapshotsBtn">Capture snapshots</button>
+        <button id="loadCompetitorsBtn">List tracked competitors</button>
+        <div id="competitorsResult"></div>
+        <div id="competitorsListCard"></div>
+      </section>
+
+      <section class="card">
+        <h2>Local search rank</h2>
+        <div class="row">
+          <input id="rankKeyword" type="text" placeholder="Keyword (defaults to business name)" />
+        </div>
+        <button id="trackRankBtn">Track rank</button>
+        <div id="rankResult"></div>
+      </section>
+
+      <section class="card">
+        <h2>Reputation</h2>
+        <button id="captureSentimentTrendBtn">Capture sentiment trend</button>
+        <button id="checkDuplicateListingsBtn">Check duplicate listings</button>
+        <div id="reputationResult"></div>
+      </section>
+
+      <section class="card">
+        <h2>Listing sync</h2>
+        <p class="muted">Pushes the business's canonical name/address/phone out to connected platforms (GBP today).</p>
+        <button id="syncListingInfoBtn">Sync listing info</button>
+        <div id="syncListingResult"></div>
+      </section>
+
+      <section class="card">
+        <h2>Visibility score trend</h2>
+        <p class="muted">Score history across past audits.</p>
+        <button id="loadScoreHistoryBtn">Load history</button>
+        <div id="scoreHistoryCard">—</div>
+      </section>
+
+      <section class="card">
+        <h2>Platform breakdown</h2>
+        <p class="muted">Which connected platforms are actually earning attention.</p>
+        <button id="loadPlatformBreakdownBtn">Load breakdown</button>
+        <div id="platformBreakdownCard">—</div>
+      </section>
+
+      <section class="card">
+        <h2>Revenue by platform</h2>
+        <p class="muted">Calls, form fills, bookings, and Stripe revenue attributed to each platform.</p>
+        <button id="loadRevenueBtn">Load revenue</button>
+        <div id="revenueCard">—</div>
+      </section>
+
+      <section class="card">
+        <h2>Published posts</h2>
+        <p class="muted">What actually went out to each platform — real post id/link on success, the real error on failure.</p>
+        <button id="loadPostStatusBtn">Load post status</button>
+        <div id="postStatusCard">—</div>
+      </section>
+
+      <section class="card">
+        <h2>Content calendar</h2>
+        <p class="muted">Everything queued, approved, or edited but not yet posted.</p>
+        <button id="loadCalendarBtn">Load calendar</button>
+        <div id="calendarCard">—</div>
+      </section>
+
+      <section class="card">
+        <h2>Predict draft score</h2>
+        <div class="row">
+          <input id="draftContentItemId" type="text" placeholder="Content item ID" />
+        </div>
+        <button id="predictDraftScoreBtn">Predict score</button>
+        <div id="draftScoreResult"></div>
+      </section>
+
+      <section class="card">
+        <h2>Platform credentials</h2>
+        <div class="row">
+          <input id="platformInput" type="text" placeholder="platform, e.g. facebook" />
+          <button id="lookupFieldsBtn">Lookup fields</button>
+        </div>
+        <div id="credentialFields"></div>
+        <button id="saveCredentialsBtn" hidden>Save credentials</button>
+        <div id="credentialsResult"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

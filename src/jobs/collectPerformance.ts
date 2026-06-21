@@ -1,6 +1,8 @@
 import "dotenv/config";
 import { supabase } from "../lib/supabase.js";
 import { collectPerformance } from "../performance/index.js";
+import { evaluateBoostTriggers } from "../trigger-engine/index.js";
+import { postVariantBIfDue } from "../distribution/index.js";
 import type { Business } from "../types.js";
 
 async function main(): Promise<void> {
@@ -8,7 +10,16 @@ async function main(): Promise<void> {
   if (error) throw error;
 
   for (const business of (businesses ?? []) as Business[]) {
-    await collectPerformance(business);
+    // One business throwing (e.g. a malformed row, an unexpected platform
+    // value) shouldn't stop performance collection/boost evaluation for
+    // every other business in this cron run.
+    try {
+      await postVariantBIfDue(business);
+      await collectPerformance(business);
+      await evaluateBoostTriggers(business);
+    } catch (err) {
+      console.error(`collectPerformance job failed for business ${business.id}:`, err);
+    }
   }
 }
 

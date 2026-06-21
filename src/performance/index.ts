@@ -1,35 +1,147 @@
 import { supabase } from "../lib/supabase.js";
 import { fetchGbpInsights } from "../distribution/gbp.js";
+import { fetchMetaInsights } from "../distribution/meta.js";
+import { fetchPinterestInsights } from "../distribution/pinterest.js";
+import { fetchTwitterInsights } from "../distribution/twitter.js";
+import { fetchLinkedinInsights } from "../distribution/linkedin.js";
+import { fetchThreadsInsights } from "../distribution/threads.js";
+import { fetchYelpInsights } from "../distribution/yelp.js";
+import { fetchNextdoorInsights } from "../distribution/nextdoor.js";
+import { fetchSnapchatInsights } from "../distribution/snapchat.js";
+import { fetchTiktokInsights } from "../distribution/tiktok.js";
+import { fetchYoutubeInsights } from "../distribution/youtube.js";
+import { fetchWhatsappInsights } from "../distribution/whatsapp.js";
+import { fetchRedditInsights } from "../distribution/reddit.js";
+import { fetchBlueskyInsights } from "../distribution/bluesky.js";
+import { fetchMastodonInsights } from "../distribution/mastodon.js";
+import { fetchTumblrInsights } from "../distribution/tumblr.js";
+import { fetchWechatInsights } from "../distribution/wechat.js";
+import { fetchTelegramInsights } from "../distribution/telegram.js";
+import { fetchDiscordInsights } from "../distribution/discord.js";
+import { fetchMediumInsights } from "../distribution/medium.js";
+import { fetchVkInsights } from "../distribution/vk.js";
+import { fetchLineInsights } from "../distribution/line.js";
+import { fetchVimeoInsights } from "../distribution/vimeo.js";
+import { fetchFlickrInsights } from "../distribution/flickr.js";
+import { fetchFoursquareInsights } from "../distribution/foursquare.js";
+import { fetchBingInsights } from "../distribution/bing.js";
+import { fetchApplebusinessInsights } from "../distribution/applebusiness.js";
+import { fetchHouzzInsights } from "../distribution/houzz.js";
+import { fetchAngiInsights } from "../distribution/angi.js";
+import { fetchThumbtackInsights } from "../distribution/thumbtack.js";
+import { fetchTripadvisorInsights } from "../distribution/tripadvisor.js";
+import { fetchOpentableInsights } from "../distribution/opentable.js";
+import { fetchQuoraInsights } from "../distribution/quora.js";
+import { fetchTrustpilotInsights } from "../distribution/trustpilot.js";
+import { fetchYandexInsights } from "../distribution/yandex.js";
+import { genericAdapters } from "../distribution/genericAdapter.js";
+import { withRetry } from "../lib/retry.js";
+import { logAgentAction } from "../lib/agentAction.js";
+import { computeEngagementScore } from "../content-analytics/index.js";
 import type { Business, Post } from "../types.js";
 
-/** Polls GBP Insights for a business's posted items and updates stored metrics. */
+async function fetchInsight(business: Business, post: Post, platformPostId: string) {
+  if (post.platform === "gbp") return fetchGbpInsights(business, platformPostId);
+  if (post.platform === "facebook" || post.platform === "instagram") return fetchMetaInsights(business, platformPostId);
+  if (post.platform === "pinterest") return fetchPinterestInsights(business, platformPostId);
+  if (post.platform === "twitter") return fetchTwitterInsights(business, platformPostId);
+  if (post.platform === "linkedin") return fetchLinkedinInsights(business, platformPostId);
+  if (post.platform === "threads") return fetchThreadsInsights(business, platformPostId);
+  if (post.platform === "yelp") return fetchYelpInsights(business, platformPostId);
+  if (post.platform === "nextdoor") return fetchNextdoorInsights(business, platformPostId);
+  if (post.platform === "snapchat") return fetchSnapchatInsights(business, platformPostId);
+  if (post.platform === "tiktok") return fetchTiktokInsights(business, platformPostId);
+  if (post.platform === "youtube") return fetchYoutubeInsights(business, platformPostId);
+  if (post.platform === "whatsapp") return fetchWhatsappInsights(business, platformPostId);
+  if (post.platform === "reddit") return fetchRedditInsights(business, platformPostId);
+  if (post.platform === "bluesky") return fetchBlueskyInsights(business, platformPostId);
+  if (post.platform === "mastodon") return fetchMastodonInsights(business, platformPostId);
+  if (post.platform === "tumblr") return fetchTumblrInsights(business, platformPostId);
+  if (post.platform === "wechat") return fetchWechatInsights(business, platformPostId);
+  if (post.platform === "telegram") return fetchTelegramInsights(business, platformPostId);
+  if (post.platform === "discord") return fetchDiscordInsights(business, platformPostId);
+  if (post.platform === "medium") return fetchMediumInsights(business, platformPostId);
+  if (post.platform === "vk") return fetchVkInsights(business, platformPostId);
+  if (post.platform === "line") return fetchLineInsights(business, platformPostId);
+  if (post.platform === "vimeo") return fetchVimeoInsights(business, platformPostId);
+  if (post.platform === "flickr") return fetchFlickrInsights(business, platformPostId);
+  if (post.platform === "foursquare") return fetchFoursquareInsights(business, platformPostId);
+  if (post.platform === "bing") return fetchBingInsights(business, platformPostId);
+  if (post.platform === "applebusiness") return fetchApplebusinessInsights(business, platformPostId);
+  if (post.platform === "houzz") return fetchHouzzInsights(business, platformPostId);
+  if (post.platform === "angi") return fetchAngiInsights(business, platformPostId);
+  if (post.platform === "thumbtack") return fetchThumbtackInsights(business, platformPostId);
+  if (post.platform === "tripadvisor") return fetchTripadvisorInsights(business, platformPostId);
+  if (post.platform === "opentable") return fetchOpentableInsights(business, platformPostId);
+  if (post.platform === "quora") return fetchQuoraInsights(business, platformPostId);
+  if (post.platform === "trustpilot") return fetchTrustpilotInsights(business, platformPostId);
+  if (post.platform === "yandex") return fetchYandexInsights(business, platformPostId);
+  const generic = genericAdapters[post.platform];
+  if (generic) return generic.fetchInsights(business, platformPostId);
+  throw new Error(`Unsupported platform: ${post.platform}`);
+}
+
+/** Polls per-platform insights for a business's posted items and updates stored metrics. */
 export async function collectPerformance(business: Business): Promise<void> {
+  const { data: itemIds, error: itemsError } = await supabase
+    .from("content_item")
+    .select("id")
+    .eq("business_id", business.id);
+  if (itemsError) throw itemsError;
+
   const { data: posts, error } = await supabase
     .from("post")
     .select("*")
-    .eq("platform", "gbp")
     .not("platform_post_id", "is", null)
-    .in(
-      "content_item_id",
-      (
-        await supabase.from("content_item").select("id").eq("business_id", business.id)
-      ).data?.map((c) => c.id) ?? []
-    );
+    .in("content_item_id", (itemIds ?? []).map((c) => c.id));
   if (error) throw error;
 
   for (const post of (posts ?? []) as Post[]) {
     if (!post.platform_post_id) continue;
 
-    const insight = await fetchGbpInsights(business, post.platform_post_id);
+    // One platform's insights API being down shouldn't block polling every
+    // other post for this business (or, transitively, every later business
+    // in the cron run that calls this function in a loop).
+    try {
+      const insight = await withRetry(() => fetchInsight(business, post, post.platform_post_id!));
+      const calls = "calls" in insight ? insight.calls : 0;
+      const engagement = "engagement" in insight ? insight.engagement : 0;
+      await supabase
+        .from("post")
+        .update({
+          views: insight.views,
+          clicks: insight.clicks,
+          calls,
+          engagement,
+          last_polled_at: new Date().toISOString(),
+        })
+        .eq("id", post.id);
 
-    await supabase
-      .from("post")
-      .update({
+      // Phase 14.3: append a score snapshot rather than only overwriting the
+      // post row in place, so trend/velocity detection has a time series to
+      // work from instead of just the latest poll's totals.
+      const score = computeEngagementScore({
         views: insight.views,
         clicks: insight.clicks,
-        calls: insight.calls,
-        last_polled_at: new Date().toISOString(),
-      })
-      .eq("id", post.id);
+        calls,
+        engagement,
+        impressions: post.impressions,
+        shares: post.shares,
+      });
+      await supabase.from("post_metric_snapshot").insert({ post_id: post.id, score });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await logAgentAction({
+        businessId: business.id,
+        source: "weekly_job",
+        intent: "collect_performance",
+        tool: "fetch_insight",
+        input: { postId: post.id, platform: post.platform },
+        status: "failed",
+        riskLevel: "low",
+        approvalRequired: false,
+        error: message,
+      });
+    }
   }
 }

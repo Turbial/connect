@@ -13,8 +13,11 @@ function getClient() {
   return client;
 }
 
-export async function sendApprovalSms(to: string, body: string): Promise<void> {
-  const from = process.env.TWILIO_FROM_NUMBER;
+/** Phase 8.7: fromOverride lets an org's own Twilio number stand in for the
+ * platform default, so an agency's clients see the agency's sender identity
+ * end-to-end — null/omitted falls back to TWILIO_FROM_NUMBER unchanged. */
+export async function sendApprovalSms(to: string, body: string, fromOverride?: string | null): Promise<void> {
+  const from = fromOverride ?? process.env.TWILIO_FROM_NUMBER;
   if (!from) throw new Error("TWILIO_FROM_NUMBER must be set");
 
   await getClient().messages.create({ to, from, body });
