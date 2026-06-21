@@ -121,13 +121,89 @@ td, th {
 .tag.ok { background: #18402a; color: #6fe3a1; }
 .tag.warn { background: #463418; color: #e3c36f; }
 .tag.bad { background: #402020; color: #e36f6f; }
+.tag.neutral { background: #262a33; color: #9aa3b2; }
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.page-header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #2a2d34;
+  margin-bottom: 1rem;
+}
+
+.tab {
+  background: transparent;
+  color: #9aa3b2;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.tab:hover {
+  background: #1a1d23;
+}
+
+.tab.active {
+  color: white;
+  border-bottom-color: #2f6feb;
+}
+
+.empty-state {
+  padding: 1rem 0;
+  text-align: left;
+}
+
+.empty-state-icon {
+  font-size: 1.2rem;
+  margin-bottom: 0.25rem;
+}
+
+.form-field {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.form-field label {
+  font-size: 0.8rem;
+  color: #9aa3b2;
+}
 
 .nav {
   display: flex;
   gap: 0.25rem;
   flex-wrap: wrap;
+  align-items: center;
   padding: 0.75rem 1.5rem;
   border-bottom: 1px solid #2a2d34;
+}
+
+.nav-sep {
+  width: 1px;
+  height: 1.2rem;
+  background: #2a2d34;
+  margin: 0 0.4rem;
 }
 
 .nav a {

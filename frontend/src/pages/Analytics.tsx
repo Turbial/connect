@@ -2,6 +2,8 @@ import { useState } from "react";
 import { callTool } from "../api";
 import { Card } from "../components/Card";
 import { BarChart } from "../components/BarChart";
+import { DataTable } from "../components/DataTable";
+import { PageHeader } from "../components/PageHeader";
 
 export function Analytics({ onError }: { onError: (msg: string) => void }) {
   const [scoreHistory, setScoreHistory] = useState<any[] | null>(null);
@@ -39,7 +41,9 @@ export function Analytics({ onError }: { onError: (msg: string) => void }) {
   }
 
   return (
-    <div className="grid">
+    <div>
+      <PageHeader title="Revenue" />
+      <div className="grid">
       <Card title="Visibility score trend" hint="Score history across past audits.">
         <button onClick={loadScoreHistory}>Load history</button>
         {scoreHistory && (!scoreHistory.length ? "No audits run yet." : (
@@ -53,19 +57,18 @@ export function Analytics({ onError }: { onError: (msg: string) => void }) {
           <>
             <p className="muted">Avg score by platform</p>
             <BarChart bars={platformBreakdown.map((e: any) => ({ label: e.platform, value: Number(e.avgScore.toFixed(1)) }))} />
-            <table>
-              <tr><th>Platform</th><th>Posts</th><th>Avg score</th><th>Views</th><th>Clicks</th><th>Engagement</th></tr>
-              {platformBreakdown.map((e: any, i: number) => (
-                <tr key={i}>
-                  <td>{e.platform}</td>
-                  <td>{e.postCount}</td>
-                  <td>{e.avgScore.toFixed(1)}</td>
-                  <td>{e.totalViews}</td>
-                  <td>{e.totalClicks}</td>
-                  <td>{e.totalEngagement}</td>
-                </tr>
-              ))}
-            </table>
+            <DataTable
+              emptyMessage="No posted content yet."
+              rows={platformBreakdown}
+              columns={[
+                { key: "platform", label: "Platform" },
+                { key: "postCount", label: "Posts" },
+                { key: "avgScore", label: "Avg score", render: (e: any) => e.avgScore.toFixed(1) },
+                { key: "totalViews", label: "Views" },
+                { key: "totalClicks", label: "Clicks" },
+                { key: "totalEngagement", label: "Engagement" },
+              ]}
+            />
           </>
         ))}
       </Card>
@@ -76,19 +79,19 @@ export function Analytics({ onError }: { onError: (msg: string) => void }) {
           <>
             <p className="muted">Revenue ($) by platform</p>
             <BarChart bars={revenue.map((e: any) => ({ label: e.platform, value: Math.round(e.totalAmountCents / 100) }))} />
-            <table>
-              <tr><th>Platform</th><th>Leads</th><th>Revenue</th></tr>
-              {revenue.map((e: any, i: number) => (
-                <tr key={i}>
-                  <td>{e.platform}</td>
-                  <td>{e.leadCount}</td>
-                  <td>${(e.totalAmountCents / 100).toFixed(2)}</td>
-                </tr>
-              ))}
-            </table>
+            <DataTable
+              emptyMessage="No lead/revenue events recorded yet."
+              rows={revenue}
+              columns={[
+                { key: "platform", label: "Platform" },
+                { key: "leadCount", label: "Leads" },
+                { key: "revenue", label: "Revenue", render: (e: any) => `$${(e.totalAmountCents / 100).toFixed(2)}` },
+              ]}
+            />
           </>
         ))}
       </Card>
+      </div>
     </div>
   );
 }

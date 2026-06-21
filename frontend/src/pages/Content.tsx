@@ -1,20 +1,30 @@
 import { useState } from "react";
 import { callTool } from "../api";
 import { Card } from "../components/Card";
+import { Tabs } from "../components/Tabs";
+import { DataTable } from "../components/DataTable";
+import { EmptyState } from "../components/EmptyState";
+import { FormField } from "../components/FormField";
+import { Tag } from "../components/Tag";
+import { useTab } from "../useTab";
 
-export function Content({ onError }: { onError: (msg: string) => void }) {
+const TABS = [
+  { key: "calendar", label: "Calendar" },
+  { key: "approvals", label: "Approvals" },
+  { key: "published", label: "Published" },
+  { key: "performance", label: "Performance" },
+  { key: "trending", label: "Trending" },
+  { key: "predictor", label: "Predictor" },
+];
+
+function CalendarTab({ onError }: { onError: (msg: string) => void }) {
   const [queueResult, setQueueResult] = useState("");
   const [caption, setCaption] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
   const [mediaType, setMediaType] = useState("image");
   const [platforms, setPlatforms] = useState("");
   const [postNowResult, setPostNowResult] = useState("");
-  const [performance, setPerformance] = useState<any>(null);
-  const [trending, setTrending] = useState<any[] | null>(null);
   const [calendar, setCalendar] = useState<any[] | null>(null);
-  const [postStatus, setPostStatus] = useState<any[] | null>(null);
-  const [draftId, setDraftId] = useState("");
-  const [draftScore, setDraftScore] = useState<any>(null);
 
   async function queueContent() {
     onError("");
@@ -41,55 +51,11 @@ export function Content({ onError }: { onError: (msg: string) => void }) {
     }
   }
 
-  async function analyzePerformance() {
-    onError("");
-    try {
-      const { output } = await callTool<any>("analyze_content_performance");
-      setPerformance(output);
-    } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function flagTrending() {
-    onError("");
-    try {
-      const { output } = await callTool<any[]>("flag_trending_content");
-      setTrending((output || []).filter((p: any) => p.trending));
-    } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
   async function loadCalendar() {
     onError("");
     try {
       const { output } = await callTool<any[]>("get_content_calendar");
       setCalendar(output);
-    } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function loadPostStatus() {
-    onError("");
-    try {
-      const { output } = await callTool<any[]>("get_post_status");
-      setPostStatus(output);
-    } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function predictDraftScore() {
-    onError("");
-    if (!draftId.trim()) {
-      onError("Enter a content item ID first.");
-      return;
-    }
-    try {
-      const { output } = await callTool<any>("predict_draft_score", { contentItemId: draftId.trim() });
-      setDraftScore(output);
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err));
     }
@@ -125,6 +91,121 @@ export function Content({ onError }: { onError: (msg: string) => void }) {
         <div>{postNowResult}</div>
       </Card>
 
+      <Card title="Content calendar" hint="Everything queued, approved, or edited but not yet posted.">
+        <button onClick={loadCalendar}>Load calendar</button>
+        {calendar && (
+          <DataTable
+            emptyMessage="Nothing queued."
+            rows={calendar}
+            columns={[
+              { key: "status", label: "Status" },
+              { key: "platforms", label: "Platforms", render: (e: any) => e.platforms.join(", ") },
+              { key: "caption", label: "Caption", render: (e: any) => e.caption.slice(0, 60) },
+              { key: "createdAt", label: "Created at" },
+            ]}
+          />
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function ApprovalsTab({ onError }: { onError: (msg: string) => void }) {
+  const [approvals, setApprovals] = useState<any[] | null>(null);
+
+  async function load() {
+    onError("");
+    try {
+      const { output } = await callTool<any[]>("get_pending_approvals");
+      setApprovals(output);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="grid">
+      <Card title="Pending approvals" hint="Content items currently awaiting owner approval.">
+        <button onClick={load}>Load pending approvals</button>
+        {approvals && (
+          <DataTable
+            emptyMessage="Nothing pending."
+            rows={approvals}
+            columns={[
+              { key: "channel", label: "Channel" },
+              { key: "sentAt", label: "Sent at" },
+            ]}
+          />
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function PublishedTab({ onError }: { onError: (msg: string) => void }) {
+  const [postStatus, setPostStatus] = useState<any[] | null>(null);
+
+  async function loadPostStatus() {
+    onError("");
+    try {
+      const { output } = await callTool<any[]>("get_post_status");
+      setPostStatus(output);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="grid">
+      <Card title="Published posts" hint="What actually went out to each platform — real post id/link on success, the real error on failure.">
+        <button onClick={loadPostStatus}>Load post status</button>
+        {postStatus && (
+          <DataTable
+            emptyMessage="Nothing posted yet."
+            rows={postStatus}
+            columns={[
+              { key: "platform", label: "Platform" },
+              {
+                key: "status",
+                label: "Status",
+                render: (e: any) =>
+                  e.status === "posted" ? (
+                    e.link ? (
+                      <a href={e.link} target="_blank" rel="noopener noreferrer">
+                        posted
+                      </a>
+                    ) : (
+                      `posted (${e.platformPostId ?? ""})`
+                    )
+                  ) : (
+                    <Tag variant="bad">failed: {e.error ?? ""}</Tag>
+                  ),
+              },
+              { key: "caption", label: "Caption", render: (e: any) => e.caption.slice(0, 60) },
+              { key: "postedAt", label: "Posted at", render: (e: any) => e.postedAt ?? "" },
+            ]}
+          />
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function PerformanceTab({ onError }: { onError: (msg: string) => void }) {
+  const [performance, setPerformance] = useState<any>(null);
+
+  async function analyzePerformance() {
+    onError("");
+    try {
+      const { output } = await callTool<any>("analyze_content_performance");
+      setPerformance(output);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="grid">
       <Card title="Content performance">
         <button onClick={analyzePerformance}>Analyze what's working</button>
         {performance && (
@@ -143,66 +224,91 @@ export function Content({ onError }: { onError: (msg: string) => void }) {
           </div>
         )}
       </Card>
+    </div>
+  );
+}
 
+function TrendingTab({ onError }: { onError: (msg: string) => void }) {
+  const [trending, setTrending] = useState<any[] | null>(null);
+
+  async function flagTrending() {
+    onError("");
+    try {
+      const { output } = await callTool<any[]>("flag_trending_content");
+      setTrending((output || []).filter((p: any) => p.trending));
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="grid">
       <Card title="Trending content">
         <button onClick={flagTrending}>Check what's trending</button>
-        {trending && (trending.length === 0 ? (
-          <p className="muted">Nothing trending above your recent average right now.</p>
-        ) : (
-          <ul>
-            {trending.map((p: any, i: number) => (
-              <li key={i}>"{p.caption.slice(0, 60)}" — score climbing at {p.velocity.toFixed(1)}/hr (current score {Math.round(p.currentScore)}).</li>
-            ))}
-          </ul>
-        ))}
+        {trending &&
+          (trending.length === 0 ? (
+            <EmptyState message="Nothing trending above your recent average right now." />
+          ) : (
+            <ul>
+              {trending.map((p: any, i: number) => (
+                <li key={i}>
+                  "{p.caption.slice(0, 60)}" — score climbing at {p.velocity.toFixed(1)}/hr (current score {Math.round(p.currentScore)}).
+                </li>
+              ))}
+            </ul>
+          ))}
       </Card>
+    </div>
+  );
+}
 
-      <Card title="Content calendar" hint="Everything queued, approved, or edited but not yet posted.">
-        <button onClick={loadCalendar}>Load calendar</button>
-        {calendar && (!calendar.length ? "Nothing queued." : (
-          <table>
-            {calendar.map((e: any, i: number) => (
-              <tr key={i}>
-                <td>{e.status}</td>
-                <td>{e.platforms.join(", ")}</td>
-                <td>{e.caption.slice(0, 60)}</td>
-                <td>{e.createdAt}</td>
-              </tr>
-            ))}
-          </table>
-        ))}
-      </Card>
+function PredictorTab({ onError }: { onError: (msg: string) => void }) {
+  const [draftId, setDraftId] = useState("");
+  const [draftScore, setDraftScore] = useState<any>(null);
 
-      <Card title="Published posts" hint="What actually went out to each platform — real post id/link on success, the real error on failure.">
-        <button onClick={loadPostStatus}>Load post status</button>
-        {postStatus && (!postStatus.length ? "Nothing posted yet." : (
-          <table>
-            <tr><th>Platform</th><th>Status</th><th>Caption</th><th>Posted at</th></tr>
-            {postStatus.map((e: any, i: number) => (
-              <tr key={i}>
-                <td>{e.platform}</td>
-                <td>
-                  {e.status === "posted" ? (
-                    e.link ? <a href={e.link} target="_blank" rel="noopener noreferrer">posted</a> : `posted (${e.platformPostId ?? ""})`
-                  ) : (
-                    <span className="error-text">failed: {e.error ?? ""}</span>
-                  )}
-                </td>
-                <td>{e.caption.slice(0, 60)}</td>
-                <td>{e.postedAt ?? ""}</td>
-              </tr>
-            ))}
-          </table>
-        ))}
-      </Card>
+  async function predictDraftScore() {
+    onError("");
+    if (!draftId.trim()) {
+      onError("Enter a content item ID first.");
+      return;
+    }
+    try {
+      const { output } = await callTool<any>("predict_draft_score", { contentItemId: draftId.trim() });
+      setDraftScore(output);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
 
+  return (
+    <div className="grid">
       <Card title="Predict draft score">
-        <div className="row">
-          <input type="text" placeholder="Content item ID" value={draftId} onChange={(e) => setDraftId(e.target.value)} />
-        </div>
+        <FormField label="Content item ID">
+          <input type="text" value={draftId} onChange={(e) => setDraftId(e.target.value)} />
+        </FormField>
         <button onClick={predictDraftScore}>Predict score</button>
-        {draftScore && <div><strong>{draftScore.score}</strong> / 100 — {draftScore.reason}</div>}
+        {draftScore && (
+          <div>
+            <strong>{draftScore.score}</strong> / 100 — {draftScore.reason}
+          </div>
+        )}
       </Card>
+    </div>
+  );
+}
+
+export function Content({ onError }: { onError: (msg: string) => void }) {
+  const [tab, setTab] = useTab("calendar");
+
+  return (
+    <div>
+      <Tabs tabs={TABS} active={tab} onChange={setTab} />
+      {tab === "calendar" && <CalendarTab onError={onError} />}
+      {tab === "approvals" && <ApprovalsTab onError={onError} />}
+      {tab === "published" && <PublishedTab onError={onError} />}
+      {tab === "performance" && <PerformanceTab onError={onError} />}
+      {tab === "trending" && <TrendingTab onError={onError} />}
+      {tab === "predictor" && <PredictorTab onError={onError} />}
     </div>
   );
 }

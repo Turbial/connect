@@ -1,44 +1,61 @@
 import { useState } from "react";
-import { useHashRoute, navigate } from "./router";
+import { useHashRoute, navigate, currentPath, navigateWithParam } from "./router";
 import { clearSession, state } from "./api";
 import { Nav } from "./components/Nav";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { Content } from "./pages/Content";
-import { Boosts } from "./pages/Boosts";
-import { Competitors } from "./pages/Competitors";
-import { Rank } from "./pages/Rank";
-import { Seo } from "./pages/Seo";
+import { Growth } from "./pages/Growth";
 import { Reputation } from "./pages/Reputation";
 import { Analytics } from "./pages/Analytics";
-import { Org } from "./pages/Org";
-import { Branding } from "./pages/Branding";
-import { ActionQueue } from "./pages/ActionQueue";
-import { Credentials } from "./pages/Credentials";
+import { Platforms } from "./pages/Platforms";
+import { Settings } from "./pages/Settings";
 
 const PAGES: Record<string, (props: { onError: (msg: string) => void }) => JSX.Element> = {
   "/content": Content,
-  "/boosts": Boosts,
-  "/competitors": Competitors,
-  "/rank": Rank,
-  "/seo": Seo,
+  "/growth": Growth,
   "/reputation": Reputation,
-  "/analytics": Analytics,
-  "/org": Org,
-  "/branding": Branding,
-  "/queue": ActionQueue,
-  "/credentials": Credentials,
+  "/revenue": Analytics,
+  "/platforms": Platforms,
+  "/settings": Settings,
+};
+
+/** Old flat routes -> [new top-level route, default tab]. Keeps every link
+ * that used to work from 404ing — they now land on the equivalent tab of
+ * the new grouped IA instead. */
+const REDIRECTS: Record<string, [string, string]> = {
+  "/boosts": ["/growth", "boosts"],
+  "/competitors": ["/growth", "competitors"],
+  "/rank": ["/growth", "local-seo"],
+  "/seo": ["/growth", "local-seo"],
+  "/analytics": ["/revenue", ""],
+  "/org": ["/settings", "org"],
+  "/branding": ["/settings", "branding"],
+  "/queue": ["/settings", "org"],
+  "/credentials": ["/platforms", "credentials"],
 };
 
 export function App() {
-  const route = useHashRoute();
+  useHashRoute();
+  const route = currentPath();
   const [loaded, setLoaded] = useState(Boolean(state.apiKey && state.businessId));
   const [businessName, setBusinessName] = useState("");
   const [error, setError] = useState("");
 
   if (!loaded) {
     return <Login onLoaded={() => setLoaded(true)} />;
+  }
+
+  const redirect = REDIRECTS[route];
+  if (redirect) {
+    const [target, tab] = redirect;
+    if (tab) {
+      navigateWithParam(target, "tab", tab);
+    } else {
+      navigate(target);
+    }
+    return null;
   }
 
   function switchBusiness() {

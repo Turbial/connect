@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { callTool } from "../api";
 import { Card } from "../components/Card";
+import { Tag } from "../components/Tag";
+import { DataTable } from "../components/DataTable";
 
 function statusTag(status: string, actionRequired?: boolean) {
-  const cls = actionRequired ? "bad" : status === "verified" ? "ok" : "warn";
-  return <span className={`tag ${cls}`}>{status}</span>;
+  const variant = actionRequired ? "bad" : status === "verified" ? "ok" : "warn";
+  return <Tag variant={variant}>{status}</Tag>;
 }
 
 export function Dashboard({ onError, onLoaded }: { onError: (msg: string) => void; onLoaded: (businessName: string) => void }) {
@@ -72,33 +74,25 @@ export function Dashboard({ onError, onLoaded }: { onError: (msg: string) => voi
       </Card>
 
       <Card title="Connections">
-        {!snapshot.connections?.length ? (
-          "No connections yet."
-        ) : (
-          <table>
-            {snapshot.connections.map((c: any, i: number) => (
-              <tr key={i}>
-                <td>{c.platform}</td>
-                <td>{statusTag(c.status, c.actionRequired)}</td>
-              </tr>
-            ))}
-          </table>
-        )}
+        <DataTable
+          emptyMessage="No connections yet."
+          rows={snapshot.connections ?? []}
+          columns={[
+            { key: "platform", label: "Platform" },
+            { key: "status", label: "Status", render: (c: any) => statusTag(c.status, c.actionRequired) },
+          ]}
+        />
       </Card>
 
       <Card title="Pending approvals">
-        {!snapshot.pendingApprovals?.length ? (
-          "Nothing pending."
-        ) : (
-          <table>
-            {snapshot.pendingApprovals.map((a: any, i: number) => (
-              <tr key={i}>
-                <td>{a.channel}</td>
-                <td>{a.sentAt}</td>
-              </tr>
-            ))}
-          </table>
-        )}
+        <DataTable
+          emptyMessage="Nothing pending."
+          rows={snapshot.pendingApprovals ?? []}
+          columns={[
+            { key: "channel", label: "Channel" },
+            { key: "sentAt", label: "Sent at" },
+          ]}
+        />
       </Card>
 
       <Card title="Pending boosts">
@@ -115,35 +109,27 @@ export function Dashboard({ onError, onLoaded }: { onError: (msg: string) => voi
       </Card>
 
       <Card title="Unresolved reviews">
-        {!snapshot.unresolvedReviews?.length ? (
-          "None unresolved."
-        ) : (
-          <table>
-            {snapshot.unresolvedReviews.map((r: any, i: number) => (
-              <tr key={i}>
-                <td>{r.rating ?? "—"}</td>
-                <td>{r.customerName ?? "anonymous"}</td>
-                <td>{r.text ?? ""}</td>
-              </tr>
-            ))}
-          </table>
-        )}
+        <DataTable
+          emptyMessage="None unresolved."
+          rows={snapshot.unresolvedReviews ?? []}
+          columns={[
+            { key: "rating", label: "Rating", render: (r: any) => r.rating ?? "—" },
+            { key: "customerName", label: "Customer", render: (r: any) => r.customerName ?? "anonymous" },
+            { key: "text", label: "Review", render: (r: any) => r.text ?? "" },
+          ]}
+        />
       </Card>
 
       <Card title="Recent agent actions">
-        {!snapshot.recentActions?.length ? (
-          "No recent activity."
-        ) : (
-          <table>
-            {snapshot.recentActions.map((a: any, i: number) => (
-              <tr key={i}>
-                <td>{a.intent ?? a.tool}</td>
-                <td>{a.status}</td>
-                <td>{a.created_at ?? ""}</td>
-              </tr>
-            ))}
-          </table>
-        )}
+        <DataTable
+          emptyMessage="No recent activity."
+          rows={snapshot.recentActions ?? []}
+          columns={[
+            { key: "intent", label: "Action", render: (a: any) => a.intent ?? a.tool },
+            { key: "status", label: "Status" },
+            { key: "created_at", label: "At", render: (a: any) => a.created_at ?? "" },
+          ]}
+        />
       </Card>
     </div>
   );

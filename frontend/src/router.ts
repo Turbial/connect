@@ -20,3 +20,26 @@ export function useHashRoute(): string {
 export function navigate(path: string): void {
   window.location.hash = path;
 }
+
+/** Splits the current hash into its base path and a parsed query-string,
+ * so tabbed pages can keep the active tab in the URL (e.g. `#/content?tab=calendar`)
+ * and have it survive refresh/back-button, consistent with hash-based routing. */
+export function currentPath(): string {
+  return currentHash().split("?")[0] || "/";
+}
+
+export function currentParams(): URLSearchParams {
+  const [, query = ""] = currentHash().split("?");
+  return new URLSearchParams(query);
+}
+
+export function navigateWithParam(path: string, key: string, value: string): void {
+  const params = new URLSearchParams();
+  params.set(key, value);
+  window.location.hash = `${path}?${params.toString()}`;
+}
+
+export function setParam(key: string, value: string): void {
+  const path = currentPath();
+  navigateWithParam(path, key, value);
+}
