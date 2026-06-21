@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase.js";
-import type { Business, Competitor } from "../types.js";
+import type { Business, Competitor, CompetitorSnapshot } from "../types.js";
 
 /**
  * Tracks named competitors per business via the Google Places API (New)
@@ -53,4 +53,33 @@ export async function captureCompetitorSnapshots(business: Business): Promise<vo
     });
     if (insertError) throw insertError;
   }
+}
+
+export interface CompetitorWithLatestSnapshot extends Competitor {
+  latestSnapshot: Pick<CompetitorSnapshot, "rating" | "review_count" | "captured_at"> | null;
+}
+
+/** Every tracked competitor for a business alongside its most recent
+ * snapshot, so the owner can see who's being tracked and how they compare
+ * without separately querying competitor + competitor_snapshot. */
+export async function getTrackedCompetitors(businessId: string): Promise<CompetitorWithLatestSnapshot[]> {
+  const { data: competitors, error } = await supabase
+    .from("competitor")
+    .select("*")
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+
+  const results: CompetitorWithLatestSnapshot[] = [];
+  for (const competitor of (competitors ?? []) as Competitor[]) {
+    const { data: snapshots, error: snapshotError } = await supabase
+      .from("competitor_snapshot")
+      .select("rating, review_count, captured_at")
+      .eq("competitor_id", competitor.id)
+      .order("captured_at", { ascending: false })
+      .limit(1);
+    if (snapshotError) throw snapshotError;
+    results.push({ ...competitor, latestSnapshot: snapshots?.[0] ?? null });
+  }
+  return results;
 }

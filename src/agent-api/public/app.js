@@ -229,6 +229,24 @@ el("captureCompetitorSnapshotsBtn").addEventListener("click", async () => {
   }
 });
 
+function renderCompetitors(competitors) {
+  if (!competitors || competitors.length === 0) return el("competitorsListCard").textContent = "No competitors tracked yet.";
+  const rows = competitors
+    .map((c) => `<tr><td>${c.name}</td><td>${c.latestSnapshot?.rating ?? "—"}</td><td>${c.latestSnapshot?.review_count ?? "—"}</td></tr>`)
+    .join("");
+  el("competitorsListCard").innerHTML = `<table><tr><th>Name</th><th>Rating</th><th>Reviews</th></tr>${rows}</table>`;
+}
+
+el("loadCompetitorsBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("get_tracked_competitors");
+    renderCompetitors(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
 el("trackRankBtn").addEventListener("click", async () => {
   showError("");
   try {

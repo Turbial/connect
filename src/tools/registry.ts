@@ -7,7 +7,7 @@ import { setPlatformCredentials } from "../lib/platformCredentials.js";
 import { queueWeeklyContent } from "../content-engine/index.js";
 import { evaluateBoostTriggers } from "../trigger-engine/index.js";
 import { runSeoAudit } from "../seo-audit/index.js";
-import { addCompetitor, captureCompetitorSnapshots } from "../competitor-monitor/index.js";
+import { addCompetitor, captureCompetitorSnapshots, getTrackedCompetitors } from "../competitor-monitor/index.js";
 import { trackRank } from "../rank-tracker/index.js";
 import { captureSentimentTrend } from "../sentiment-tracker/index.js";
 import { checkDuplicateListings } from "../duplicate-listing-check/index.js";
@@ -40,7 +40,8 @@ export type ToolName =
   | "predict_draft_score"
   | "get_content_calendar"
   | "get_platform_breakdown"
-  | "get_visibility_score_history";
+  | "get_visibility_score_history"
+  | "get_tracked_competitors";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -225,6 +226,13 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
       if (!name) throw new Error('"name" is required.');
       return { wouldAddCompetitor: name };
     },
+  },
+  get_tracked_competitors: {
+    description: "Every tracked competitor for this business with its most recent rating/review-count snapshot.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: (b) => getTrackedCompetitors(b.id),
+    preview: (b) => getTrackedCompetitors(b.id),
   },
   capture_competitor_snapshots: {
     description: "Captures a fresh rating/review-count snapshot for each tracked competitor via the Google Places API.",
