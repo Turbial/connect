@@ -111,6 +111,40 @@ export async function getContentCalendar(businessId: string): Promise<ContentCal
   }));
 }
 
+export interface PlatformBreakdownEntry {
+  platform: Platform;
+  postCount: number;
+  avgScore: number;
+  totalViews: number;
+  totalClicks: number;
+  totalEngagement: number;
+}
+
+/** Aggregates posted-content performance by platform so an owner can see
+ * which platforms are actually earning attention vs. which are just
+ * checked-off connections — same scoring as analyzeContentPerformance, just
+ * grouped by platform instead of by attribute. */
+export async function getPlatformBreakdown(businessId: string): Promise<PlatformBreakdownEntry[]> {
+  const ranked = await rankContentPerformance(businessId);
+  const byPlatform = new Map<Platform, ContentPerformanceEntry[]>();
+  for (const entry of ranked) {
+    const group = byPlatform.get(entry.platform) ?? [];
+    group.push(entry);
+    byPlatform.set(entry.platform, group);
+  }
+
+  return [...byPlatform.entries()]
+    .map(([platform, entries]) => ({
+      platform,
+      postCount: entries.length,
+      avgScore: entries.reduce((sum, e) => sum + e.score, 0) / entries.length,
+      totalViews: entries.reduce((sum, e) => sum + e.views, 0),
+      totalClicks: entries.reduce((sum, e) => sum + e.clicks, 0),
+      totalEngagement: entries.reduce((sum, e) => sum + e.engagement, 0),
+    }))
+    .sort((a, b) => b.avgScore - a.avgScore);
+}
+
 /** Splits ranked entries into a top and bottom group to compare, using a
  * fixed fraction of the list (clamped so small lists still get at least one
  * entry per side, and so the two groups never overlap). */

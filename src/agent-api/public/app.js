@@ -270,6 +270,24 @@ el("syncListingInfoBtn").addEventListener("click", async () => {
   }
 });
 
+function renderPlatformBreakdown(entries) {
+  if (!entries || entries.length === 0) return el("platformBreakdownCard").textContent = "No posted content yet.";
+  const rows = entries
+    .map((e) => `<tr><td>${e.platform}</td><td>${e.postCount}</td><td>${e.avgScore.toFixed(1)}</td><td>${e.totalViews}</td><td>${e.totalClicks}</td><td>${e.totalEngagement}</td></tr>`)
+    .join("");
+  el("platformBreakdownCard").innerHTML = `<table><tr><th>Platform</th><th>Posts</th><th>Avg score</th><th>Views</th><th>Clicks</th><th>Engagement</th></tr>${rows}</table>`;
+}
+
+el("loadPlatformBreakdownBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("get_platform_breakdown");
+    renderPlatformBreakdown(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
 function renderCalendar(entries) {
   if (!entries || entries.length === 0) return el("calendarCard").textContent = "Nothing queued.";
   const rows = entries
