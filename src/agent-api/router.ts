@@ -10,6 +10,7 @@ export type Route =
   | { kind: "create_business" }
   | { kind: "send_owner_verification"; businessId: string }
   | { kind: "confirm_owner_verification"; businessId: string }
+  | { kind: "extract_brand"; businessId: string }
   | { kind: "signup" }
   | { kind: "login" };
 
@@ -44,6 +45,11 @@ export function matchRoute(method: string, path: string): Route | null {
   const confirmVerificationMatch = /^\/businesses\/([^/]+)\/owner-verification\/confirm$/.exec(normalizedPath);
   if (method === "POST" && confirmVerificationMatch) {
     return { kind: "confirm_owner_verification", businessId: confirmVerificationMatch[1] };
+  }
+
+  const brandExtractMatch = /^\/businesses\/([^/]+)\/brand-extract$/.exec(normalizedPath);
+  if (method === "POST" && brandExtractMatch) {
+    return { kind: "extract_brand", businessId: brandExtractMatch[1] };
   }
 
   return null;

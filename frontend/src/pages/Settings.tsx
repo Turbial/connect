@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { callTool } from "../api";
+import { callTool, apiFetch, state as session } from "../api";
 import { Card } from "../components/Card";
 import { Tabs } from "../components/Tabs";
 import { DataTable } from "../components/DataTable";
@@ -124,6 +124,36 @@ function BrandingTab({ onError }: { onError: (msg: string) => void }) {
   const [logoUrl, setLogoUrl] = useState("");
   const [primaryColor, setPrimaryColor] = useState("");
   const [result, setResult] = useState("");
+  const [siteUrl, setSiteUrl] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [extractResult, setExtractResult] = useState("");
+
+  async function fetchFromWebsite() {
+    onError("");
+    setExtractResult("");
+    if (!siteUrl.trim()) {
+      onError("Enter the business's existing website URL first.");
+      return;
+    }
+    setExtracting(true);
+    try {
+      const { brand } = await apiFetch<{ brand: any }>(`businesses/${session.businessId}/brand-extract`, {
+        method: "POST",
+        body: { url: siteUrl.trim() },
+      });
+      const primary = brand.colors?.primary;
+      if (primary) setPrimaryColor(primary);
+      if (brand.images?.[0]) setLogoUrl(brand.images[0]);
+      setExtractResult(
+        `Pulled from ${brand.sourceUrl}: ${Object.keys(brand.colors ?? {}).length} colors, ` +
+          `${brand.fonts?.length ?? 0} fonts, ${brand.images?.length ?? 0} images. Review fields below before saving.`,
+      );
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExtracting(false);
+    }
+  }
 
   async function load() {
     onError("");
@@ -156,6 +186,24 @@ function BrandingTab({ onError }: { onError: (msg: string) => void }) {
 
   return (
     <div className="grid">
+      <Card
+        title="Fetch from existing website"
+        hint="Pulls colors, fonts, and images off a business's current site so you don't have to guess them by hand."
+      >
+        <FormField label="Existing website URL">
+          <input
+            type="text"
+            placeholder="https://example.com"
+            value={siteUrl}
+            onChange={(e) => setSiteUrl(e.target.value)}
+          />
+        </FormField>
+        <button onClick={fetchFromWebsite} disabled={extracting}>
+          {extracting ? "Fetching…" : "Fetch brand"}
+        </button>
+        <div>{extractResult}</div>
+      </Card>
+
       <Card title="Report branding" hint="Agency/Franchise tiers only — requires white_label_reports feature. Used on weekly report emails.">
         <FormField label="Logo URL">
           <input type="text" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} />

@@ -8,6 +8,7 @@ import { callTool, getToolCatalog, type ToolName } from "../tools/registry.js";
 import { credentialFieldsFor } from "../lib/platformCredentials.js";
 import { createBusiness } from "../lib/business.js";
 import { sendOwnerVerificationCode, confirmOwnerVerification } from "../lib/ownerVerification.js";
+import { extractBrandFromUrl } from "../lib/brandExtract.js";
 import { createAccount, authenticateAccount, createSession, getAccountForToken, hasBusinessAccess, grantBusinessAccess } from "../lib/accounts.js";
 import { supabase } from "../lib/supabase.js";
 import type { Account, Business, Platform } from "../types.js";
@@ -234,6 +235,32 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
       sendJson(res, verified ? 200 : 400, { verified });
     } catch (err) {
       sendJson(res, 500, { error: err instanceof Error ? err.message : "Failed to confirm verification code" });
+    }
+    return;
+  }
+
+  if (route.kind === "extract_brand") {
+    if (!(await authorizeBusiness(route.businessId))) {
+      sendJson(res, 403, { error: "Forbidden" });
+      return;
+    }
+    let body: Record<string, unknown>;
+    try {
+      body = await readJsonBody(req);
+    } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : "Invalid request body" });
+      return;
+    }
+    const url = body.url as string | undefined;
+    if (!url) {
+      sendJson(res, 400, { error: '"url" is required' });
+      return;
+    }
+    try {
+      const brand = await extractBrandFromUrl(url);
+      sendJson(res, 200, { brand });
+    } catch (err) {
+      sendJson(res, 502, { error: err instanceof Error ? err.message : "Failed to extract brand" });
     }
     return;
   }
