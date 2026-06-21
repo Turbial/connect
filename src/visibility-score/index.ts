@@ -693,3 +693,25 @@ export async function getLatestVisibilityScore(businessId: string): Promise<Visi
     industryInsight: industryInsightFor(vertical),
   };
 }
+
+export interface VisibilityScoreHistoryPoint {
+  score: number;
+  computedAt: string;
+}
+
+/** Plain score-over-time series for charting, oldest first — distinct from
+ * getLatestVisibilityScore's single-point trend/drivers, which only looks
+ * one step back. */
+export async function getVisibilityScoreHistory(businessId: string, limit = 30): Promise<VisibilityScoreHistoryPoint[]> {
+  const { data, error } = await supabase
+    .from("visibility_score")
+    .select("score, computed_at")
+    .eq("business_id", businessId)
+    .order("computed_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+
+  return ((data ?? []) as { score: number; computed_at: string }[])
+    .map((row) => ({ score: row.score, computedAt: row.computed_at }))
+    .reverse();
+}

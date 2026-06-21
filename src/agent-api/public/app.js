@@ -270,6 +270,24 @@ el("syncListingInfoBtn").addEventListener("click", async () => {
   }
 });
 
+function renderScoreHistory(points) {
+  if (!points || points.length === 0) return el("scoreHistoryCard").textContent = "No audits run yet.";
+  const rows = points
+    .map((p) => `<tr><td>${new Date(p.computedAt).toLocaleDateString()}</td><td>${p.score}</td></tr>`)
+    .join("");
+  el("scoreHistoryCard").innerHTML = `<table>${rows}</table>`;
+}
+
+el("loadScoreHistoryBtn").addEventListener("click", async () => {
+  showError("");
+  try {
+    const { output } = await callTool("get_visibility_score_history");
+    renderScoreHistory(output);
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
 function renderPlatformBreakdown(entries) {
   if (!entries || entries.length === 0) return el("platformBreakdownCard").textContent = "No posted content yet.";
   const rows = entries

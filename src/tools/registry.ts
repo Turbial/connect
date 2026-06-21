@@ -1,7 +1,7 @@
 import { supabase } from "../lib/supabase.js";
 import { logAgentAction } from "../lib/agentAction.js";
 import { buildOperatorSnapshot, getPendingApprovals } from "../lib/operatorSnapshot.js";
-import { getLatestVisibilityScore, computeVisibilityScore } from "../visibility-score/index.js";
+import { getLatestVisibilityScore, computeVisibilityScore, getVisibilityScoreHistory } from "../visibility-score/index.js";
 import { getConnectionSummary } from "../lib/platformConnection.js";
 import { setPlatformCredentials } from "../lib/platformCredentials.js";
 import { queueWeeklyContent } from "../content-engine/index.js";
@@ -39,7 +39,8 @@ export type ToolName =
   | "flag_trending_content"
   | "predict_draft_score"
   | "get_content_calendar"
-  | "get_platform_breakdown";
+  | "get_platform_breakdown"
+  | "get_visibility_score_history";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -146,6 +147,13 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
     approvalRequired: false,
     run: (b) => getPlatformBreakdown(b.id),
     preview: (b) => getPlatformBreakdown(b.id),
+  },
+  get_visibility_score_history: {
+    description: "The business's Local Visibility Score over time (oldest first), for charting trend rather than just the latest point.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: (b) => getVisibilityScoreHistory(b.id),
+    preview: (b) => getVisibilityScoreHistory(b.id),
   },
   // Read tools above never have side effects, so their dry-run preview is
   // identical to a real call — there is nothing to defer.

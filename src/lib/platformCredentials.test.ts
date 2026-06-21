@@ -14,6 +14,11 @@ describe("credentialFieldsFor", () => {
   it("falls back to the default single-token column for an un-overridden platform", () => {
     expect(credentialFieldsFor("pinterest")).toEqual(["pinterest_access_token"]);
   });
+
+  it("includes both id and token columns for a generic-stub platform, since postTo requires both", () => {
+    expect(credentialFieldsFor("weibo")).toEqual(["weibo_id", "weibo_access_token"]);
+    expect(credentialFieldsFor("shopee")).toEqual(["shopee_id", "shopee_access_token"]);
+  });
 });
 
 describe("setPlatformCredentials", () => {

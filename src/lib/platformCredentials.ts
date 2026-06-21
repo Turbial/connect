@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js";
 import { upsertConnection } from "./platformConnection.js";
+import { genericAdapters } from "../distribution/genericAdapter.js";
 import type { Platform } from "../types.js";
 
 /** A handful of platforms split their credential across more than one
@@ -17,9 +18,15 @@ const CREDENTIAL_FIELD_OVERRIDES: Partial<Record<Platform, string[]>> = {
 
 /** The business-table column(s) that hold a given platform's credentials —
  * the exact allowlist setPlatformCredentials validates against, so a write
- * coming in over the agent API can never touch a column outside this set. */
+ * coming in over the agent API can never touch a column outside this set.
+ * Every generic-stub platform (genericAdapter.ts) requires both an id and a
+ * token column to post at all, so they default to both rather than just
+ * `_access_token` — without this, an operator could never set the id field
+ * for any of the 82 generic platforms and postTo would always throw. */
 export function credentialFieldsFor(platform: Platform): string[] {
-  return CREDENTIAL_FIELD_OVERRIDES[platform] ?? [`${platform}_access_token`];
+  if (CREDENTIAL_FIELD_OVERRIDES[platform]) return CREDENTIAL_FIELD_OVERRIDES[platform]!;
+  if (platform in genericAdapters) return [`${platform}_id`, `${platform}_access_token`];
+  return [`${platform}_access_token`];
 }
 
 export interface SetPlatformCredentialsResult {
