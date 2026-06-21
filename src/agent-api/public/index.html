@@ -9,11 +9,15 @@
 <body>
   <header>
     <h1>Connect</h1>
-    <div class="auth-bar">
+    <div class="auth-bar" id="authBar">
       <input id="apiKey" type="password" placeholder="Agent API key" />
       <input id="businessId" type="text" placeholder="Business ID" />
       <button id="loadBtn">Load</button>
       <span id="authStatus"></span>
+    </div>
+    <div class="auth-bar" id="loadedBar" hidden>
+      <span id="loadedAs"></span>
+      <button id="switchBusinessBtn">Switch business</button>
     </div>
   </header>
 

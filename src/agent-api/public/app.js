@@ -31,7 +31,10 @@ async function callTool(name, { dryRun = false, ...input } = {}) {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const message = body?.diagnosis?.reason || body?.error || `Request failed (${res.status})`;
+    const message =
+      res.status === 401
+        ? "Invalid API key — check it matches the server's configured key."
+        : body?.diagnosis?.reason || body?.error || `Request failed (${res.status})`;
     throw new Error(message);
   }
   return body;
@@ -100,6 +103,24 @@ function renderActions(actions) {
   el("actionsCard").innerHTML = `<table>${rows}</table>`;
 }
 
+/** Once a business loads successfully, there's no reason to keep showing the
+ * raw API-key/business-ID entry fields or the onboarding forms — they're
+ * confusing clutter once you're actually looking at that business's
+ * dashboard. Swap to a one-line "loaded as X" status with a way back out. */
+function showLoadedState(businessName) {
+  el("authBar").hidden = true;
+  el("loadedBar").hidden = false;
+  el("loadedAs").textContent = `Viewing: ${businessName}`;
+  el("onboarding").hidden = true;
+}
+
+function showLoginState() {
+  el("authBar").hidden = false;
+  el("loadedBar").hidden = true;
+  el("onboarding").hidden = false;
+  el("app").hidden = true;
+}
+
 async function loadSnapshot() {
   showError("");
   try {
@@ -111,6 +132,7 @@ async function loadSnapshot() {
     renderReviews(output.unresolvedReviews);
     renderActions(output.recentActions);
     el("app").hidden = false;
+    showLoadedState(output.business?.name ?? "this business");
   } catch (err) {
     showError(err.message);
   }
@@ -126,6 +148,17 @@ el("loadBtn").addEventListener("click", () => {
     return;
   }
   loadSnapshot();
+});
+
+el("switchBusinessBtn").addEventListener("click", () => {
+  state.apiKey = "";
+  state.businessId = "";
+  localStorage.removeItem("connect_api_key");
+  localStorage.removeItem("connect_business_id");
+  el("apiKey").value = "";
+  el("businessId").value = "";
+  showError("");
+  showLoginState();
 });
 
 el("runAuditBtn").addEventListener("click", async () => {
