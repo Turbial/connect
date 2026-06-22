@@ -5,7 +5,7 @@ import { Tabs } from "../components/Tabs";
 import { DataTable } from "../components/DataTable";
 import { EmptyState } from "../components/EmptyState";
 import { FormField } from "../components/FormField";
-import { StatusBadge } from "../components/StatusBadge";
+import { Tag } from "../components/Tag";
 import { useTab } from "../useTab";
 
 const TABS = [
@@ -14,7 +14,8 @@ const TABS = [
 ];
 
 function statusTag(status: string, actionRequired?: boolean) {
-  return <StatusBadge ok={!actionRequired && status === "verified"} label={status} />;
+  const variant = actionRequired ? "bad" : status === "verified" ? "ok" : "warn";
+  return <Tag variant={variant}>{status}</Tag>;
 }
 
 function ConnectionsTab({ onError }: { onError: (msg: string) => void }) {

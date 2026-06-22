@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createBusinessProfile, type BusinessProfileInput } from "./businessProfile.js";
+import { createBusinessProfile, updateBusinessProfile, type BusinessProfileInput } from "./businessProfile.js";
 
 const baseInput: BusinessProfileInput = {
   name: "Joe's Plumbing",
@@ -30,5 +30,11 @@ describe("createBusinessProfile", () => {
     await expect(createBusinessProfile({ ...baseInput, ownerPreferredChannel: undefined as never })).rejects.toThrow(
       /ownerPreferredChannel/
     );
+  });
+});
+
+describe("updateBusinessProfile", () => {
+  it("rejects an update with no fields instead of issuing a no-op write", async () => {
+    await expect(updateBusinessProfile("biz-1", {})).rejects.toThrow(/no fields/);
   });
 });

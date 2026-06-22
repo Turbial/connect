@@ -25,6 +25,10 @@ describe("getToolCatalog", () => {
     expect(names).toContain("get_agent_action_queue");
     expect(names).toContain("get_report_branding");
     expect(names).toContain("set_report_branding");
+    expect(names).toContain("update_business_profile");
+    expect(names).toContain("set_posting_cadence");
+    expect(names).toContain("send_owner_verification_code");
+    expect(names).toContain("confirm_owner_verification");
 
     // Implementation details (run/preview functions) must never leak into the catalog.
     for (const entry of catalog) {
