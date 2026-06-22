@@ -47,39 +47,45 @@ export function Login({ onLoaded }: { onLoaded: () => void }) {
     <div>
       <header>
         <h1>Connect</h1>
-        <div className="auth-bar">
-          <input
-            type="password"
-            placeholder="Agent API key or session token"
-            value={apiKey}
-            onChange={(e) => setApiKeyInput(e.target.value)}
-          />
-          <input
-            type="text"
-            placeholder="Business ID"
-            value={businessId}
-            onChange={(e) => setBusinessIdInput(e.target.value)}
-          />
-          <button onClick={handleLoad}>Load</button>
-          <span>{error}</span>
-        </div>
-        <details className="auth-bar">
-          <summary>Or log in / sign up</summary>
-          <div className="row">
-            <input type="text" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <input
-              type="password"
-              placeholder="Password (8+ chars)"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <button onClick={() => handleAuth("auth/login")}>Log in</button>
-            <button onClick={() => handleAuth("auth/signup")}>Sign up</button>
-          </div>
-          <div>{authResult}</div>
-        </details>
       </header>
       <main>
+        <div className="auth-shell">
+          <div className="auth-card card">
+            <h2>Sign in</h2>
+            <p className="muted">Enter your agent API key and business ID to load this business</p>
+            <div className="row">
+              <input
+                type="password"
+                placeholder="Agent API key or session token"
+                value={apiKey}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="Business ID"
+                value={businessId}
+                onChange={(e) => setBusinessIdInput(e.target.value)}
+              />
+              <button onClick={handleLoad}>Load</button>
+            </div>
+            {error && <p className="error-text">{error}</p>}
+            <details>
+              <summary>Or log in / sign up</summary>
+              <div className="row">
+                <input type="text" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <input
+                  type="password"
+                  placeholder="Password (8+ chars)"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button onClick={() => handleAuth("auth/login")}>Log in</button>
+                <button onClick={() => handleAuth("auth/signup")}>Sign up</button>
+              </div>
+              <div>{authResult}</div>
+            </details>
+          </div>
+        </div>
         <Onboarding apiKey={apiKey} businessId={businessId} setBusinessId={setBusinessIdInput} onLoaded={onLoaded} />
       </main>
     </div>

@@ -8,6 +8,8 @@ const LINKS: { path: string; label: string }[] = [
   { path: "/revenue", label: "Revenue" },
   { path: "/platforms", label: "Platforms" },
   { path: "/settings", label: "Settings" },
+  { path: "/billing", label: "Billing" },
+  { path: "/support", label: "Support" },
 ];
 
 export function Nav({ active }: { active: string }) {
@@ -15,7 +17,7 @@ export function Nav({ active }: { active: string }) {
     <nav className="nav">
       {LINKS.map((link, i) => (
         <span key={link.path} style={{ display: "flex", alignItems: "center" }}>
-          {i === 1 && <span className="nav-sep" />}
+          {(i === 1 || i === 7) && <span className="nav-sep" />}
           <a
             href={`#${link.path}`}
             className={active === link.path ? "active" : ""}

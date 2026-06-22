@@ -11,6 +11,8 @@ import { Reputation } from "./pages/Reputation";
 import { Analytics } from "./pages/Analytics";
 import { Platforms } from "./pages/Platforms";
 import { Settings } from "./pages/Settings";
+import { Billing } from "./pages/Billing";
+import { Support } from "./pages/Support";
 
 const PAGES: Record<string, (props: { onError: (msg: string) => void }) => JSX.Element> = {
   "/content": Content,
@@ -19,6 +21,8 @@ const PAGES: Record<string, (props: { onError: (msg: string) => void }) => JSX.E
   "/revenue": Analytics,
   "/platforms": Platforms,
   "/settings": Settings,
+  "/billing": Billing,
+  "/support": Support,
 };
 
 /** Old flat routes -> [new top-level route, default tab]. Keeps every link

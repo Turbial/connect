@@ -1,6 +1,19 @@
 :root {
   font-family: system-ui, sans-serif;
   color-scheme: light dark;
+
+  /* Theme tokens shared with github.com/Turbial/web-components partials —
+     keep these in sync with that naming so a partial dropped in here (or a
+     future brand-extract autofill) needs no rewriting, just new values. */
+  --bg: #0f1115;
+  --surface: #161920;
+  --text: #e6e8eb;
+  --muted: #9aa3b2;
+  --border: #2a2d34;
+  --accent: #2f6feb;
+  --radius: 4px;
+  --radius-lg: 8px;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
 body {
@@ -270,4 +283,112 @@ td, th {
 .nav a.active {
   background: #2f6feb;
   color: white;
+}
+
+/* Ported from github.com/Turbial/web-components partials/notice.hbs */
+.notice {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  margin-bottom: 1rem;
+}
+
+.notice-title {
+  margin: 0 0 0.1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.notice-body {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.notice.destructive {
+  border-color: #7a2c2c;
+  background: #3a1c1c;
+}
+
+.notice.destructive .notice-title,
+.notice.destructive .notice-body {
+  color: #ffb4b4;
+}
+
+/* Ported from partials/account-auth.hbs / account-management.hbs */
+.auth-shell {
+  padding: 3rem 1.5rem;
+  display: flex;
+  justify-content: center;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+}
+
+/* Ported from partials/billing.hbs */
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.plan-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.plan-card.featured {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.plan-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.plan-price {
+  margin: 0 0 1.25rem;
+}
+
+.plan-price strong {
+  font-size: 1.8rem;
+}
+
+.plan-price span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.plan-features {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.plan-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.plan-features li::before {
+  content: "✓";
+  color: var(--accent);
 }
