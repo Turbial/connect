@@ -18,6 +18,8 @@ import { analyzeContentPerformance, flagTrendingContent, predictDraftScore, getC
 import { postContentItemNow, type ManualPostInput } from "../distribution/index.js";
 import { hasFeature } from "../lib/packages.js";
 import { getReportBranding, setReportBranding } from "../lib/reportBranding.js";
+import { updateBusinessProfile, type BusinessProfileUpdate } from "../lib/businessProfile.js";
+import { sendOwnerVerificationCode, confirmOwnerVerification } from "../lib/ownerVerification.js";
 import type { AgentActionRiskLevel, AgentActionSource, Business, ContentItem, Platform } from "../types.js";
 
 function requireFeature(business: Business, feature: Parameters<typeof hasFeature>[1]): void {
@@ -38,6 +40,33 @@ function toManualPostInput(input: Record<string, unknown>): ManualPostInput {
     mediaType: input.mediaType === "video" ? "video" : "image",
     surface: typeof input.surface === "string" ? (input.surface as ContentItem["surface"]) : undefined,
   };
+}
+
+const PROFILE_UPDATE_FIELDS: (keyof BusinessProfileUpdate)[] = [
+  "name",
+  "serviceArea",
+  "phone",
+  "website",
+  "ownerMobile",
+  "ownerPreferredChannel",
+  "servicesOffered",
+  "brandTone",
+  "bannedWords",
+  "bannedClaims",
+  "logoUrl",
+  "photoUrls",
+  "targetLocations",
+  "complianceRestrictions",
+];
+
+function toBusinessProfileUpdate(input: Record<string, unknown>): BusinessProfileUpdate {
+  const update: BusinessProfileUpdate = {};
+  for (const field of PROFILE_UPDATE_FIELDS) {
+    if (input[field] !== undefined) {
+      (update as Record<string, unknown>)[field] = input[field];
+    }
+  }
+  return update;
 }
 
 /** Phase 8.10: the doc's tool-calling intent router (§15) — discrete,
@@ -78,7 +107,11 @@ export type ToolName =
   | "get_vertical_benchmark"
   | "get_agent_action_queue"
   | "get_report_branding"
-  | "set_report_branding";
+  | "set_report_branding"
+  | "update_business_profile"
+  | "set_posting_cadence"
+  | "send_owner_verification_code"
+  | "confirm_owner_verification";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -469,6 +502,65 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
         logoUrl: typeof input.logoUrl === "string" ? input.logoUrl : null,
         primaryColor: typeof input.primaryColor === "string" ? input.primaryColor : null,
       };
+    },
+  },
+  update_business_profile: {
+    description:
+      'Updates one or more fields on this business\'s profile (name, serviceArea, phone, website, ownerMobile, ownerPreferredChannel, servicesOffered, brandTone, bannedWords, bannedClaims, logoUrl, photoUrls, targetLocations, complianceRestrictions). Only fields present in the input are changed. Does not touch platform credentials, verification state, or package tier — those have their own tools.',
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b, input) => {
+      const update = toBusinessProfileUpdate(input);
+      if (Object.keys(update).length === 0) throw new Error("At least one profile field is required.");
+      return updateBusinessProfile(b.id, update);
+    },
+    preview: async (_b, input) => {
+      const update = toBusinessProfileUpdate(input);
+      if (Object.keys(update).length === 0) throw new Error("At least one profile field is required.");
+      return { wouldUpdateFields: Object.keys(update) };
+    },
+  },
+  set_posting_cadence: {
+    description: 'Sets how often this business\'s weekly content batch should post. Call with input: { "cadence": "3 per week" }.',
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b, input) => {
+      const cadence = input.cadence;
+      if (typeof cadence !== "string" || cadence.trim().length === 0) throw new Error('"cadence" is required.');
+      const { data, error } = await supabase.from("business").update({ posting_cadence: cadence }).eq("id", b.id).select().single();
+      if (error) throw error;
+      return data as Business;
+    },
+    preview: async (_b, input) => {
+      const cadence = input.cadence;
+      if (typeof cadence !== "string" || cadence.trim().length === 0) throw new Error('"cadence" is required.');
+      return { wouldSetPostingCadence: cadence };
+    },
+  },
+  send_owner_verification_code: {
+    description: "Sends a one-time SMS verification code to the business owner's mobile number. Must succeed before the weekly content loop will run for this business.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b) => {
+      await sendOwnerVerificationCode(b);
+      return { sent: true };
+    },
+    preview: async (b) => ({ wouldSendTo: b.owner_mobile ?? b.owner_phone ?? null }),
+  },
+  confirm_owner_verification: {
+    description: 'Confirms the code the owner replied with. Call with input: { "code": "123456" }. Returns { verified: false } for a wrong or expired code rather than throwing.',
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b, input) => {
+      const code = input.code;
+      if (typeof code !== "string" || code.trim().length === 0) throw new Error('"code" is required.');
+      const verified = await confirmOwnerVerification(b.id, code);
+      return { verified };
+    },
+    preview: async (_b, input) => {
+      const code = input.code;
+      if (typeof code !== "string" || code.trim().length === 0) throw new Error('"code" is required.');
+      return { wouldConfirmWithCode: true };
     },
   },
 };

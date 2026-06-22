@@ -3,7 +3,6 @@ import { callTool, apiFetch, state as session } from "../api";
 import { Card } from "../components/Card";
 import { Tabs } from "../components/Tabs";
 import { DataTable } from "../components/DataTable";
-import { EmptyState } from "../components/EmptyState";
 import { FormField } from "../components/FormField";
 import { useTab } from "../useTab";
 
@@ -15,31 +14,134 @@ const TABS = [
   { key: "branding", label: "Report Branding" },
 ];
 
-function BusinessProfileTab() {
+const PROFILE_FIELDS: { key: string; label: string }[] = [
+  { key: "name", label: "Business name" },
+  { key: "serviceArea", label: "Service area" },
+  { key: "phone", label: "Phone" },
+  { key: "website", label: "Website" },
+  { key: "ownerMobile", label: "Owner mobile" },
+  { key: "brandTone", label: "Brand tone" },
+];
+
+function BusinessProfileTab({ onError }: { onError: (msg: string) => void }) {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [result, setResult] = useState("");
+
+  async function save() {
+    onError("");
+    setResult("");
+    const update: Record<string, string> = {};
+    for (const field of PROFILE_FIELDS) {
+      if (values[field.key]?.trim()) update[field.key] = values[field.key].trim();
+    }
+    if (Object.keys(update).length === 0) {
+      onError("Enter at least one field to update.");
+      return;
+    }
+    try {
+      await callTool("update_business_profile", update);
+      setResult("Saved.");
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   return (
     <div className="grid">
-      <Card title="Business profile">
-        <EmptyState message="Not yet available — backend endpoint needed (no update_business tool exists yet)." />
+      <Card title="Business profile" hint="Only fields you fill in are changed — leave the rest blank.">
+        {PROFILE_FIELDS.map((field) => (
+          <FormField key={field.key} label={field.label}>
+            <input
+              type="text"
+              value={values[field.key] ?? ""}
+              onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
+            />
+          </FormField>
+        ))}
+        <button onClick={save}>Save profile</button>
+        <div>{result}</div>
       </Card>
     </div>
   );
 }
 
-function OwnerVerificationTab() {
+function OwnerVerificationTab({ onError }: { onError: (msg: string) => void }) {
+  const [code, setCode] = useState("");
+  const [result, setResult] = useState("");
+  const [sending, setSending] = useState(false);
+
+  async function send() {
+    onError("");
+    setResult("");
+    setSending(true);
+    try {
+      await callTool("send_owner_verification_code");
+      setResult("Verification code sent.");
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function confirm() {
+    onError("");
+    setResult("");
+    if (!code.trim()) {
+      onError("Enter the code the owner received.");
+      return;
+    }
+    try {
+      const { output } = await callTool<{ verified: boolean }>("confirm_owner_verification", { code: code.trim() });
+      setResult(output.verified ? "Owner verified." : "Wrong or expired code.");
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   return (
     <div className="grid">
-      <Card title="Owner verification">
-        <EmptyState message="Not yet available — backend endpoint needed (no verify_owner tool exists yet)." />
+      <Card title="Owner verification" hint="The weekly content loop will not run until the owner is verified.">
+        <button onClick={send} disabled={sending}>
+          {sending ? "Sending…" : "Send verification code"}
+        </button>
+        <FormField label="Code from owner">
+          <input type="text" value={code} onChange={(e) => setCode(e.target.value)} />
+        </FormField>
+        <button onClick={confirm}>Confirm code</button>
+        <div>{result}</div>
       </Card>
     </div>
   );
 }
 
-function PostingCadenceTab() {
+function PostingCadenceTab({ onError }: { onError: (msg: string) => void }) {
+  const [cadence, setCadence] = useState("");
+  const [result, setResult] = useState("");
+
+  async function save() {
+    onError("");
+    setResult("");
+    if (!cadence.trim()) {
+      onError("Enter a posting cadence, e.g. \"3 per week\".");
+      return;
+    }
+    try {
+      await callTool("set_posting_cadence", { cadence: cadence.trim() });
+      setResult("Saved.");
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   return (
     <div className="grid">
-      <Card title="Posting cadence">
-        <EmptyState message="Not yet available — backend endpoint needed (no set_posting_cadence tool exists yet)." />
+      <Card title="Posting cadence" hint="How often the weekly content batch should post for this business.">
+        <FormField label="Cadence">
+          <input type="text" placeholder="e.g. 3 per week" value={cadence} onChange={(e) => setCadence(e.target.value)} />
+        </FormField>
+        <button onClick={save}>Save cadence</button>
+        <div>{result}</div>
       </Card>
     </div>
   );
@@ -225,9 +327,9 @@ export function Settings({ onError }: { onError: (msg: string) => void }) {
   return (
     <div>
       <Tabs tabs={TABS} active={tab} onChange={setTab} />
-      {tab === "profile" && <BusinessProfileTab />}
-      {tab === "owner-verification" && <OwnerVerificationTab />}
-      {tab === "cadence" && <PostingCadenceTab />}
+      {tab === "profile" && <BusinessProfileTab onError={onError} />}
+      {tab === "owner-verification" && <OwnerVerificationTab onError={onError} />}
+      {tab === "cadence" && <PostingCadenceTab onError={onError} />}
       {tab === "org" && <OrgTab onError={onError} />}
       {tab === "branding" && <BrandingTab onError={onError} />}
     </div>

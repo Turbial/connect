@@ -76,3 +76,59 @@ export async function createBusinessProfile(input: BusinessProfileInput): Promis
 
   return business;
 }
+
+/** Every field a business profile edit is allowed to touch — deliberately
+ * excludes platform credentials, verification state, and billing/package
+ * fields, which have their own dedicated tools and must not be reachable
+ * through a generic profile edit. */
+export type BusinessProfileUpdate = Partial<{
+  name: string;
+  serviceArea: string;
+  phone: string;
+  website: string | null;
+  ownerMobile: string;
+  ownerPreferredChannel: PreferredChannel;
+  servicesOffered: string[];
+  brandTone: string | null;
+  bannedWords: string[];
+  bannedClaims: string[];
+  logoUrl: string | null;
+  photoUrls: string[];
+  targetLocations: string[];
+  complianceRestrictions: string[];
+}>;
+
+const UPDATE_FIELD_MAP: Record<keyof BusinessProfileUpdate, string> = {
+  name: "name",
+  serviceArea: "service_area",
+  phone: "phone",
+  website: "website_url",
+  ownerMobile: "owner_mobile",
+  ownerPreferredChannel: "owner_preferred_channel",
+  servicesOffered: "services_offered",
+  brandTone: "brand_tone",
+  bannedWords: "brand_voice_banned_words",
+  bannedClaims: "brand_voice_banned_claims",
+  logoUrl: "logo_url",
+  photoUrls: "photo_urls",
+  targetLocations: "target_locations",
+  complianceRestrictions: "compliance_restrictions",
+};
+
+/** Updates only the fields present in `update`, leaving everything else on
+ * the row untouched — the counterpart to createBusinessProfile's all-fields
+ * intake, for the edit path the create-only function never had. */
+export async function updateBusinessProfile(businessId: string, update: BusinessProfileUpdate): Promise<Business> {
+  const columns: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(update)) {
+    if (value === undefined) continue;
+    columns[UPDATE_FIELD_MAP[key as keyof BusinessProfileUpdate]] = value;
+  }
+  if (Object.keys(columns).length === 0) {
+    throw new Error("updateBusinessProfile: no fields to update");
+  }
+
+  const { data, error } = await supabase.from("business").update(columns).eq("id", businessId).select().single();
+  if (error) throw error;
+  return data as Business;
+}
