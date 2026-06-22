@@ -109,9 +109,13 @@ normalized to 0-10. Weights change by vertical:
 
 A generic score is useful. A vertical-specific score is sellable.
 
-## 5. The Product Should Stay "Zero Dashboard" for Owners
+## 5. Two Surfaces, Two Standards: Owner Experience vs. Operator Console
 
-Do not build a normal owner-facing dashboard — the moment Connect becomes
+Connect has two distinct UI surfaces, and they must be held to different
+standards. Conflating them is the mistake to avoid — not the existence of a
+dashboard itself.
+
+**Owner-facing surface: stays "Zero Dashboard."** The moment Connect becomes
 another web app owners are supposed to check, it collapses into the same
 category as everything else. The whole bet: owners do not log in, Connect
 runs the work and messages them when needed.
@@ -120,11 +124,37 @@ Owner surfaces should be: SMS for simple decisions; WhatsApp/Messenger for
 rich cards; email digest for weekly proof; lightweight approval links when a
 visual preview is needed; onboarding/OAuth pages only when required.
 
-Not: daily dashboard, analytics maze, multi-tab reporting UI, owner social
-calendar to manage, complicated content editor.
+Not: a daily dashboard, an analytics maze, a multi-tab reporting UI, an owner
+social calendar to manage, a complicated content editor.
 
 The owner experience should feel like "my marketing is being handled," not
 "I have a new tool to use."
+
+**Internal/operator console: a real, professional-grade dashboard.** The
+team running Connect — internal staff, and eventually agency partners under
+the white-label tier (section 11) — needs a full multi-tab console to manage
+content, growth, reputation, revenue, platform connections, and settings
+across many businesses. This console is not the product the local-business
+owner is sold; it is the cockpit the operator uses to deliver the product.
+Because it is a real working tool, not a marketing afterthought, it should
+be held to standalone-product UI/UX standards, not internal-tool standards:
+
+- A consistent design system (a real component/token library — e.g.
+  Tailwind + a component kit — not a single hand-rolled stylesheet with
+  hardcoded hex colors).
+- Responsive layout with real breakpoints, not just `flex-wrap`.
+- Accessibility as a baseline: `aria-*` attributes, visible focus states,
+  alt text — not an afterthought.
+- Every page header, loading state, empty state, and error state built from
+  the shared component library — no page should fall back to raw
+  `JSON.stringify` output or an unstyled `<input>`.
+- No stubbed tabs in production ("not yet available" placeholders should be
+  hidden or shipped, not left visible).
+
+If the operator console looks unfinished, it does not just hurt internal
+efficiency — it undermines the truth-telling brand (section 7): a product
+that claims to refuse to fake results should not ship a console that looks
+like it's faking polish.
 
 ## 6. The Messenger / WhatsApp Upgrade
 
@@ -383,8 +413,10 @@ benchmark signals, not a flywheel. This honesty is part of the brand.
 
 ## 24. What Not To Do
 
-- Do not build a normal owner dashboard — build onboarding, approval links,
-  email reports, and chat cards instead.
+- Do not build a normal owner-facing dashboard — build onboarding, approval
+  links, email reports, and chat cards instead. (The internal/operator
+  console is a separate surface — see section 5 — and should be built to a
+  professional standard, not skipped.)
 - Do not market platform count as the main claim — "five full-loop
   platforms, thirty organic surfaces, every integration labeled truthfully"
   beats "108 platforms."
@@ -413,7 +445,9 @@ Goal: make Connect sellable and understandable as a standalone product.
 Build: free/paid Visibility Score audit flow; vertical-specific audit report
 for one beachhead vertical; business profile/brand kit; owner phone +
 Messenger/WhatsApp verification; platform connection onboarding; connection
-health states; weekly email digest v1; internal/operator console;
+health states; weekly email digest v1; internal/operator console built to
+the standalone-product UI standard defined in section 5 (real design
+system, responsive layout, accessibility baseline, no stubbed tabs);
 truth-labeled platform status view; pricing/package setup.
 Success metric: a business can get a score, understand what's broken,
 onboard, connect platforms, and approve the first weekly plan.
