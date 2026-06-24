@@ -869,3 +869,13 @@ alter table business add column if not exists meta_page_id text;
 -- ── Phase 20: review responses ───────────────────────────────────────────────
 alter table review add column if not exists response_text text;
 alter table review add column if not exists responded_at timestamptz;
+
+-- ── Phase 21: support tickets ────────────────────────────────────────────────
+create table if not exists support_ticket (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid references business(id) on delete set null,
+  name text not null,
+  email text not null,
+  message text not null,
+  created_at timestamptz not null default now()
+);

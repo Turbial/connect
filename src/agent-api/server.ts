@@ -368,6 +368,94 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
     return;
   }
 
+  if (route.kind === "create_checkout") {
+    let body: Record<string, unknown>;
+    try { body = await readJsonBody(req); } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : "Invalid body" }); return;
+    }
+    const { businessId, planKey } = body as { businessId?: string; planKey?: string };
+    if (!businessId || !planKey) { sendJson(res, 400, { error: '"businessId" and "planKey" are required' }); return; }
+    if (!(await authorizeBusiness(businessId))) { sendJson(res, 403, { error: "Forbidden" }); return; }
+
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeKey) { sendJson(res, 503, { error: "Stripe is not configured on this server" }); return; }
+
+    const priceIds: Record<string, string> = {
+      local_operator: process.env.STRIPE_PRICE_LOCAL_OPERATOR ?? "",
+      growth_operator: process.env.STRIPE_PRICE_GROWTH_OPERATOR ?? "",
+      vertical_pro: process.env.STRIPE_PRICE_VERTICAL_PRO ?? "",
+    };
+    const priceId = priceIds[planKey as string];
+    if (!priceId) { sendJson(res, 400, { error: `No Stripe price configured for plan "${planKey}"` }); return; }
+
+    const baseUrl = process.env.CONNECT_BASE_URL ?? `http://localhost:${process.env.AGENT_API_PORT ?? 8787}`;
+    try {
+      const stripeRes = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${stripeKey}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          "line_items[0][price]": priceId,
+          "line_items[0][quantity]": "1",
+          mode: "subscription",
+          success_url: `${baseUrl}/#/billing?checkout=success`,
+          cancel_url: `${baseUrl}/#/billing?checkout=cancelled`,
+          "metadata[businessId]": businessId,
+          "metadata[planKey]": planKey as string,
+        }),
+      });
+      if (!stripeRes.ok) {
+        const err = await stripeRes.json() as { error?: { message?: string } };
+        sendJson(res, 502, { error: err.error?.message ?? "Stripe error" }); return;
+      }
+      const session = await stripeRes.json() as { url: string };
+      sendJson(res, 200, { url: session.url });
+    } catch (err) {
+      sendJson(res, 500, { error: err instanceof Error ? err.message : "Checkout failed" });
+    }
+    return;
+  }
+
+  if (route.kind === "support_ticket") {
+    let body: Record<string, unknown>;
+    try { body = await readJsonBody(req); } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : "Invalid body" }); return;
+    }
+    const { name, email, message, businessId } = body as Record<string, string | undefined>;
+    if (!name?.trim() || !email?.trim() || !message?.trim()) {
+      sendJson(res, 400, { error: '"name", "email", and "message" are required' }); return;
+    }
+    try {
+      const { error: dbErr } = await supabase.from("support_ticket").insert({
+        name: name.trim(), email: email.trim(), message: message.trim(),
+        business_id: businessId ?? null,
+      });
+      if (dbErr) throw dbErr;
+
+      // Fire-and-forget email if SUPPORT_EMAIL + RESEND_API_KEY are configured
+      const resendKey = process.env.RESEND_API_KEY;
+      const supportEmail = process.env.SUPPORT_EMAIL;
+      if (resendKey && supportEmail) {
+        fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from: "noreply@mightymaxconnect.com",
+            to: supportEmail,
+            subject: `Support request from ${name.trim()}`,
+            text: `From: ${name.trim()} <${email.trim()}>\n\n${message.trim()}`,
+          }),
+        }).catch(() => {/* best-effort */});
+      }
+      sendJson(res, 201, { submitted: true });
+    } catch (err) {
+      sendJson(res, 500, { error: err instanceof Error ? err.message : "Failed to submit ticket" });
+    }
+    return;
+  }
+
   // route.kind === "call_tool"
   if (!isKnownToolName(route.toolName)) {
     sendJson(res, 404, { error: `Unknown tool "${route.toolName}"` });

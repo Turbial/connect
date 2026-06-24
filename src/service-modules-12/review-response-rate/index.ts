@@ -14,7 +14,7 @@ export async function runReviewResponseRateSignal(business: Business): Promise<v
     return;
   }
 
-  const responded = all.filter((r) => r.suggested_reply !== null).length;
+  const responded = all.filter((r) => (r as any).response_text != null || r.suggested_reply != null).length;
   const rate = responded / all.length;
   await captureSignal(business.id, "review-response-rate", "response_rate", rate.toFixed(2));
 }

@@ -133,7 +133,8 @@ export type ToolName =
   | "reply_to_review"
   | "approve_content"
   | "reject_content"
-  | "set_meta_page_id";
+  | "set_meta_page_id"
+  | "get_service_signals";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -871,6 +872,32 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
       return { set: true, metaPageId: metaPageId.trim() };
     },
     preview: async (_b, input) => ({ wouldSetMetaPageId: input.metaPageId ?? null }),
+  },
+
+  get_service_signals: {
+    description:
+      "Returns the latest service-module signal for each tracked dimension (page speed, mobile friendliness, structured data, content freshness, review response rate, local citation count, social proof, etc.).",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b) => {
+      const { data, error } = await supabase
+        .from("service_signal")
+        .select("module, signal, value, captured_at")
+        .eq("business_id", b.id)
+        .order("captured_at", { ascending: false });
+      if (error) throw error;
+      // Keep only the most recent entry per module
+      const seen = new Set<string>();
+      const latest: typeof data = [];
+      for (const row of data ?? []) {
+        if (!seen.has(row.module)) {
+          seen.add(row.module);
+          latest.push(row);
+        }
+      }
+      return latest;
+    },
+    preview: async () => [],
   },
 };
 

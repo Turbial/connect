@@ -15,7 +15,9 @@ export type Route =
   | { kind: "login" }
   | { kind: "oauth_start"; platform: string }
   | { kind: "oauth_callback"; platform: string }
-  | { kind: "upload" };
+  | { kind: "upload" }
+  | { kind: "create_checkout" }
+  | { kind: "support_ticket" };
 
 /** Phase 10: pure request-path matching for the agent API, kept separate
  * from the http server itself so routing logic is unit-testable without
@@ -66,6 +68,8 @@ export function matchRoute(method: string, path: string): Route | null {
   }
 
   if (method === "POST" && normalizedPath === "/upload") return { kind: "upload" };
+  if (method === "POST" && normalizedPath === "/billing/checkout") return { kind: "create_checkout" };
+  if (method === "POST" && normalizedPath === "/support") return { kind: "support_ticket" };
 
   return null;
 }
