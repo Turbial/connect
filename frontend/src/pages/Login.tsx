@@ -52,37 +52,45 @@ export function Login({ onLoaded }: { onLoaded: () => void }) {
         <div className="auth-shell">
           <div className="auth-card card">
             <h2>Sign in</h2>
-            <p className="muted">Enter your agent API key and business ID to load this business</p>
-            <div className="row">
+            <p className="muted" style={{ marginBottom: "1rem" }}>Enter your agent API key and business ID to continue</p>
+            <div className="form-field">
+              <label>Agent API key or session token</label>
               <input
                 type="password"
-                placeholder="Agent API key or session token"
+                placeholder="sk-…"
                 value={apiKey}
                 onChange={(e) => setApiKeyInput(e.target.value)}
               />
+            </div>
+            <div className="form-field">
+              <label>Business ID</label>
               <input
                 type="text"
-                placeholder="Business ID"
+                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                 value={businessId}
                 onChange={(e) => setBusinessIdInput(e.target.value)}
               />
-              <button onClick={handleLoad}>Load</button>
             </div>
-            {error && <p className="error-text">{error}</p>}
-            <details>
-              <summary>Or log in / sign up</summary>
-              <div className="row">
-                <input type="text" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                <input
-                  type="password"
-                  placeholder="Password (8+ chars)"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <button onClick={() => handleAuth("auth/login")}>Log in</button>
-                <button onClick={() => handleAuth("auth/signup")}>Sign up</button>
+            {error && <p className="error-text" style={{ marginBottom: "0.5rem" }}>{error}</p>}
+            <button style={{ width: "100%" }} onClick={handleLoad}>Continue</button>
+
+            <details style={{ marginTop: "1rem" }}>
+              <summary>Log in or create an account</summary>
+              <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <div className="form-field">
+                  <label>Email</label>
+                  <input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                </div>
+                <div className="form-field">
+                  <label>Password</label>
+                  <input type="password" placeholder="8+ characters" value={password} onChange={(e) => setPassword(e.target.value)} />
+                </div>
+                <div className="row" style={{ marginBottom: 0 }}>
+                  <button onClick={() => handleAuth("auth/login")}>Log in</button>
+                  <button className="secondary" onClick={() => handleAuth("auth/signup")}>Sign up</button>
+                </div>
+                {authResult && <p className="muted" style={{ margin: 0 }}>{authResult}</p>}
               </div>
-              <div>{authResult}</div>
             </details>
           </div>
         </div>

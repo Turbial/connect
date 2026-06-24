@@ -21,18 +21,22 @@ export function DataTable<T extends Record<string, any>>({
   }
   return (
     <table>
-      <tr>
-        {columns.map((col) => (
-          <th key={col.key}>{col.label}</th>
-        ))}
-      </tr>
-      {rows.map((row, i) => (
-        <tr key={i}>
+      <thead>
+        <tr>
           {columns.map((col) => (
-            <td key={col.key}>{col.render ? col.render(row, i) : row[col.key]}</td>
+            <th key={col.key}>{col.label}</th>
           ))}
         </tr>
-      ))}
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i}>
+            {columns.map((col) => (
+              <td key={col.key}>{col.render ? col.render(row, i) : row[col.key]}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
     </table>
   );
 }

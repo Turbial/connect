@@ -78,8 +78,8 @@ export function App() {
       <header>
         <h1>Connect</h1>
         <div className="auth-bar">
-          <span>Viewing: {businessName || "this business"}</span>
-          <button onClick={switchBusiness}>Switch business</button>
+          {businessName && <span>{businessName}</span>}
+          <button className="ghost" onClick={switchBusiness}>Switch business</button>
         </div>
       </header>
       <Nav active={route} />

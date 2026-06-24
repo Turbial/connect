@@ -47,7 +47,7 @@ export function Dashboard({ onError, onLoaded }: { onError: (msg: string) => voi
     load();
   }, []);
 
-  if (!snapshot) return <p className="muted">Loading…</p>;
+  if (!snapshot) return <p className="muted"><span className="spinner" />Loading dashboard…</p>;
   const score = snapshot.visibilityScore;
 
   return (
