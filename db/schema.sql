@@ -857,3 +857,11 @@ alter table organization add column if not exists report_primary_color text;
 -- for a YES reply. Only safe to enable once the owner has verified their
 -- phone and reviewed a few approval samples manually. ────────────────────
 alter table business add column if not exists autopilot_enabled boolean not null default false;
+
+-- ── Phase 19: NLP sentiment column — keyword-based positive pct added to
+-- sentiment_trend so trend queries can compare text tone vs star rating.
+alter table sentiment_trend add column if not exists nlp_positive_pct integer;
+
+-- Phase 19: Meta social webhook needs page id to route DMs/comments to
+-- the right business.
+alter table business add column if not exists meta_page_id text;

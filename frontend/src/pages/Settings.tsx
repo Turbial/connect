@@ -11,6 +11,7 @@ const TABS = [
   { key: "owner-verification", label: "Owner Verification" },
   { key: "cadence", label: "Posting Cadence" },
   { key: "autopilot", label: "Autopilot" },
+  { key: "team", label: "Team" },
   { key: "org", label: "Org & Benchmark" },
   { key: "branding", label: "Report Branding" },
 ];
@@ -173,6 +174,102 @@ function AutopilotTab({ onError }: { onError: (msg: string) => void }) {
           <button onClick={() => toggle(false)}>Disable autopilot</button>
         </div>
         {result && <p className="muted">{result}</p>}
+      </Card>
+    </div>
+  );
+}
+
+function TeamTab({ onError }: { onError: (msg: string) => void }) {
+  const [members, setMembers] = useState<any[] | null>(null);
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("staff");
+  const [addResult, setAddResult] = useState("");
+
+  async function load() {
+    onError("");
+    try {
+      const { output } = await callTool<any[]>("list_team_members");
+      setMembers(output ?? []);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function addMember() {
+    onError("");
+    setAddResult("");
+    if (!email.trim()) { onError("Enter an email address."); return; }
+    try {
+      await callTool("add_team_member", { email: email.trim(), role });
+      setAddResult(`Added ${email.trim()} as ${role}.`);
+      setEmail("");
+      await load();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function removeMember(accountId: string) {
+    onError("");
+    try {
+      await callTool("remove_team_member", { accountId });
+      setMembers((prev) => (prev ?? []).filter((m) => m.accountId !== accountId));
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function changeRole(accountId: string, newRole: string) {
+    onError("");
+    try {
+      await callTool("set_team_member_role", { accountId, role: newRole });
+      setMembers((prev) => (prev ?? []).map((m) => m.accountId === accountId ? { ...m, role: newRole } : m));
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="grid">
+      <Card title="Team members" hint="All accounts with access to this business.">
+        <button onClick={load}>Load team</button>
+        {members !== null && (
+          <DataTable
+            emptyMessage="No team members yet."
+            rows={members}
+            columns={[
+              { key: "email", label: "Email" },
+              { key: "role", label: "Role" },
+              { key: "joinedAt", label: "Joined", render: (m: any) => new Date(m.joinedAt).toLocaleDateString() },
+              {
+                key: "actions",
+                label: "",
+                render: (m: any) => (
+                  <div className="row">
+                    <button onClick={() => changeRole(m.accountId, m.role === "owner" ? "staff" : "owner")}>
+                      Make {m.role === "owner" ? "staff" : "owner"}
+                    </button>
+                    <button onClick={() => removeMember(m.accountId)}>Remove</button>
+                  </div>
+                ),
+              },
+            ]}
+          />
+        )}
+      </Card>
+
+      <Card title="Add team member" hint="The person must already have an account. They sign up at the Login page first.">
+        <FormField label="Email">
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="team@example.com" />
+        </FormField>
+        <FormField label="Role">
+          <select value={role} onChange={(e) => setRole(e.target.value)}>
+            <option value="staff">Staff</option>
+            <option value="owner">Owner</option>
+          </select>
+        </FormField>
+        <button onClick={addMember}>Add member</button>
+        {addResult && <p className="muted">{addResult}</p>}
       </Card>
     </div>
   );
@@ -372,6 +469,7 @@ export function Settings({ onError }: { onError: (msg: string) => void }) {
       {tab === "owner-verification" && <OwnerVerificationTab onError={onError} />}
       {tab === "cadence" && <PostingCadenceTab onError={onError} />}
       {tab === "autopilot" && <AutopilotTab onError={onError} />}
+      {tab === "team" && <TeamTab onError={onError} />}
       {tab === "org" && <OrgTab onError={onError} />}
       {tab === "branding" && <BrandingTab onError={onError} />}
     </div>

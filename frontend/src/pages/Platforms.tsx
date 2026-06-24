@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { callTool, getCredentialFields } from "../api";
+import { callTool, getCredentialFields, apiFetch } from "../api";
 import { Card } from "../components/Card";
 import { Tabs } from "../components/Tabs";
 import { DataTable } from "../components/DataTable";
-import { EmptyState } from "../components/EmptyState";
 import { FormField } from "../components/FormField";
 import { Tag } from "../components/Tag";
 import { useTab } from "../useTab";
 
 const TABS = [
   { key: "connections", label: "Connections" },
+  { key: "coverage", label: "Platform Coverage" },
   { key: "credentials", label: "Credentials" },
 ];
 
@@ -17,6 +17,13 @@ function statusTag(status: string, actionRequired?: boolean) {
   const variant = actionRequired ? "bad" : status === "verified" ? "ok" : "warn";
   return <Tag variant={variant}>{status}</Tag>;
 }
+
+const TIER_VARIANT: Record<string, "ok" | "warn" | "bad" | "neutral"> = {
+  verified: "ok",
+  sandbox: "warn",
+  partner_gated: "warn",
+  stub: "neutral",
+};
 
 function ConnectionsTab({ onError }: { onError: (msg: string) => void }) {
   const [connections, setConnections] = useState<any[] | null>(null);
@@ -45,7 +52,62 @@ function ConnectionsTab({ onError }: { onError: (msg: string) => void }) {
             ]}
           />
         )}
-        {!connections && <EmptyState message="Connection health grid — coming next." />}
+      </Card>
+    </div>
+  );
+}
+
+function CoverageTab({ onError }: { onError: (msg: string) => void }) {
+  const [report, setReport] = useState<any[] | null>(null);
+
+  async function load() {
+    onError("");
+    try {
+      const data = await apiFetch<any[]>("platforms/status");
+      setReport(data);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const byTier = report
+    ? (["verified", "sandbox", "partner_gated", "stub"] as const).map((tier) => ({
+        tier,
+        count: report.filter((p) => p.status === tier).length,
+      }))
+    : null;
+
+  return (
+    <div className="grid">
+      <Card
+        title="Platform coverage"
+        hint="Which platforms have real API adapters (verified), sandbox/test modes, partner-gated access, or are stubs waiting for an adapter."
+      >
+        <button onClick={load}>Load coverage</button>
+        {byTier && (
+          <div className="row" style={{ flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
+            {byTier.map(({ tier, count }) => (
+              <Tag key={tier} variant={TIER_VARIANT[tier]}>
+                {tier.replace("_", " ")}: {count}
+              </Tag>
+            ))}
+          </div>
+        )}
+        {report && (
+          <DataTable
+            emptyMessage="No platforms found."
+            rows={report}
+            columns={[
+              { key: "platform", label: "Platform" },
+              {
+                key: "status",
+                label: "Tier",
+                render: (p: any) => <Tag variant={TIER_VARIANT[p.status] ?? "neutral"}>{p.status.replace("_", " ")}</Tag>,
+              },
+              { key: "note", label: "Note", render: (p: any) => p.note ?? <span className="muted">—</span> },
+            ]}
+          />
+        )}
       </Card>
     </div>
   );
@@ -73,7 +135,7 @@ function CredentialsTab({ onError }: { onError: (msg: string) => void }) {
     onError("");
     try {
       const filtered = Object.fromEntries(Object.entries(values).filter(([, v]) => v));
-      const result = await callTool<any>("set_platform_credentials", { platform: platform.trim(), values: filtered });
+      await callTool<any>("set_platform_credentials", { platform: platform.trim(), values: filtered });
       setResult(`Credentials saved for ${platform.trim()}.`);
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err));
@@ -110,6 +172,7 @@ export function Platforms({ onError }: { onError: (msg: string) => void }) {
     <div>
       <Tabs tabs={TABS} active={tab} onChange={setTab} />
       {tab === "connections" && <ConnectionsTab onError={onError} />}
+      {tab === "coverage" && <CoverageTab onError={onError} />}
       {tab === "credentials" && <CredentialsTab onError={onError} />}
     </div>
   );

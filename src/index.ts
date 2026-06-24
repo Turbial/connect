@@ -177,6 +177,102 @@ async function resolveBusinessFromChainStepPhone(phone: string): Promise<Busines
   return (orgBusinesses.find((b) => b.id === item?.business_id) as Business) ?? null;
 }
 
+/** Phase 19: Meta Graph API webhook for Instagram/Facebook DM and comment
+ * events. GET = hub.challenge verification (Meta sends this when you register
+ * the webhook URL in the developer portal). POST = HMAC-SHA256-verified event
+ * payload — parses comment and message entries into customer_message rows so
+ * they appear in the Inbox alongside SMS and missed-call threads. */
+async function handleMetaSocialWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
+  if (req.method === "GET") {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    const mode = url.searchParams.get("hub.mode");
+    const token = url.searchParams.get("hub.verify_token");
+    const challenge = url.searchParams.get("hub.challenge");
+    const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
+    if (mode === "subscribe" && verifyToken && token === verifyToken && challenge) {
+      res.writeHead(200, { "Content-Type": "text/plain" }).end(challenge);
+    } else {
+      res.writeHead(403).end();
+    }
+    return;
+  }
+
+  if (req.method !== "POST") {
+    res.writeHead(405).end();
+    return;
+  }
+
+  let body = "";
+  for await (const chunk of req) body += chunk;
+
+  if (!verifyMetaWebhook(body, req.headers["x-hub-signature-256"] as string | undefined)) {
+    res.writeHead(403).end();
+    return;
+  }
+
+  let payload: any;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    res.writeHead(400).end();
+    return;
+  }
+
+  for (const entry of payload?.entry ?? []) {
+    const pageId: string | undefined = entry.id;
+
+    for (const change of entry?.changes ?? []) {
+      const field: string = change.field ?? "";
+      const value = change.value ?? {};
+
+      if (field === "messages") {
+        // Instagram/Facebook DM
+        const from: string | undefined = value?.sender?.id;
+        const text: string | undefined = value?.message?.text;
+        if (!from || !text) continue;
+
+        const { data: business } = await supabase
+          .from("business")
+          .select("id")
+          .eq("meta_page_id", pageId ?? "")
+          .maybeSingle();
+        if (!business) continue;
+
+        const channel = payload.object === "instagram" ? "dm_instagram" : "dm_facebook";
+        await recordCustomerMessage({
+          businessId: business.id,
+          channel,
+          direction: "inbound",
+          customerIdentifier: from,
+          body: text,
+        });
+      } else if (field === "feed" && value?.item === "comment") {
+        // Facebook Page comment
+        const from: string | undefined = value?.from?.id;
+        const text: string | undefined = value?.message;
+        if (!from || !text || value?.verb === "remove") continue;
+
+        const { data: business } = await supabase
+          .from("business")
+          .select("id")
+          .eq("meta_page_id", pageId ?? "")
+          .maybeSingle();
+        if (!business) continue;
+
+        await recordCustomerMessage({
+          businessId: business.id,
+          channel: "dm_facebook",
+          direction: "inbound",
+          customerIdentifier: from,
+          body: text,
+        });
+      }
+    }
+  }
+
+  res.writeHead(200).end();
+}
+
 async function handleReachWebhook(req: http.IncomingMessage, res: http.ServerResponse) {
   if (!verifyReachWebhook(req.headers.authorization)) {
     res.writeHead(401).end();
@@ -495,6 +591,10 @@ async function routeWebhookRequest(req: http.IncomingMessage, res: http.ServerRe
     }
     if (req.method === "POST" && req.url === "/webhooks/crm") {
       await handleCrmWebhook(req, res);
+      return;
+    }
+    if (req.url?.startsWith("/webhooks/meta-social")) {
+      await handleMetaSocialWebhook(req, res);
       return;
     }
     if (req.method === "GET" && req.url === "/platforms/partner-access-risk") {

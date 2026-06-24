@@ -10,6 +10,7 @@ import { useTab } from "../useTab";
 
 const TABS = [
   { key: "calendar", label: "Calendar" },
+  { key: "library", label: "Library" },
   { key: "approvals", label: "Approvals" },
   { key: "published", label: "Published" },
   { key: "performance", label: "Performance" },
@@ -114,6 +115,105 @@ function CalendarTab({ onError }: { onError: (msg: string) => void }) {
             ]}
           />
         )}
+      </Card>
+    </div>
+  );
+}
+
+function LibraryTab({ onError }: { onError: (msg: string) => void }) {
+  const [items, setItems] = useState<any[] | null>(null);
+  const [caption, setCaption] = useState("");
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaType, setMediaType] = useState("image");
+  const [platforms, setPlatforms] = useState("");
+  const [addResult, setAddResult] = useState("");
+
+  async function load() {
+    onError("");
+    try {
+      const { output } = await callTool<any[]>("get_content_library");
+      setItems(output ?? []);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function add() {
+    onError("");
+    setAddResult("");
+    if (!caption.trim()) { onError("Caption is required."); return; }
+    const platformList = platforms.split(",").map((p) => p.trim().toLowerCase()).filter(Boolean);
+    if (platformList.length === 0) { onError("Enter at least one platform."); return; }
+    try {
+      await callTool("add_to_library", {
+        caption: caption.trim(),
+        platforms: platformList,
+        mediaUrl: mediaUrl.trim() || undefined,
+        mediaType,
+      });
+      setAddResult("Added to library.");
+      setCaption(""); setMediaUrl(""); setPlatforms("");
+      await load();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function remove(itemId: string) {
+    onError("");
+    try {
+      await callTool("remove_from_library", { itemId });
+      setItems((prev) => (prev ?? []).filter((i) => i.id !== itemId));
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="grid">
+      <Card title="Content library" hint="Reusable captions and media shared across all locations in your org.">
+        <button onClick={load}>Load library</button>
+        {items !== null && (
+          <DataTable
+            emptyMessage="Library is empty — add your first item below."
+            rows={items}
+            columns={[
+              { key: "caption", label: "Caption", render: (i: any) => i.caption.slice(0, 80) },
+              { key: "platforms", label: "Platforms", render: (i: any) => (i.platforms ?? []).join(", ") },
+              { key: "mediaType", label: "Media", render: (i: any) => i.mediaType ?? "—" },
+              { key: "createdAt", label: "Added", render: (i: any) => new Date(i.createdAt).toLocaleDateString() },
+              {
+                key: "actions",
+                label: "",
+                render: (i: any) => (
+                  <button onClick={() => remove(i.id)}>Remove</button>
+                ),
+              },
+            ]}
+          />
+        )}
+      </Card>
+
+      <Card title="Add to library">
+        <FormField label="Caption">
+          <textarea rows={3} value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Caption text…" />
+        </FormField>
+        <FormField label="Platforms">
+          <input type="text" placeholder="instagram, facebook, tiktok" value={platforms} onChange={(e) => setPlatforms(e.target.value)} />
+        </FormField>
+        <div className="row">
+          <FormField label="Media URL (optional)">
+            <input type="text" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} />
+          </FormField>
+          <FormField label="Type">
+            <select value={mediaType} onChange={(e) => setMediaType(e.target.value)}>
+              <option value="image">Image</option>
+              <option value="video">Video</option>
+            </select>
+          </FormField>
+        </div>
+        <button onClick={add}>Add to library</button>
+        {addResult && <p className="muted">{addResult}</p>}
       </Card>
     </div>
   );
@@ -313,6 +413,7 @@ export function Content({ onError }: { onError: (msg: string) => void }) {
     <div>
       <Tabs tabs={TABS} active={tab} onChange={setTab} />
       {tab === "calendar" && <CalendarTab onError={onError} />}
+      {tab === "library" && <LibraryTab onError={onError} />}
       {tab === "approvals" && <ApprovalsTab onError={onError} />}
       {tab === "published" && <PublishedTab onError={onError} />}
       {tab === "performance" && <PerformanceTab onError={onError} />}

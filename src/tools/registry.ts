@@ -23,6 +23,9 @@ import { sendOwnerVerificationCode, confirmOwnerVerification } from "../lib/owne
 import { getInboxForBusiness, recordCustomerMessage } from "../lib/customerMessaging.js";
 import { sendApprovalSms } from "../approval/sms.js";
 import { getOrganizationForBusiness } from "../lib/orgSettings.js";
+import { listTeamMembers, addTeamMember, setTeamMemberRole, removeTeamMember } from "../lib/teamManagement.js";
+import { listLibraryItems, addLibraryItem, removeLibraryItem } from "../lib/contentLibrary.js";
+import { planWeek, getSlotsForWeek, markSlotStatus } from "../lib/contentCalendar.js";
 import type { AgentActionRiskLevel, AgentActionSource, Business, ContentItem, Platform } from "../types.js";
 
 function requireFeature(business: Business, feature: Parameters<typeof hasFeature>[1]): void {
@@ -117,7 +120,16 @@ export type ToolName =
   | "confirm_owner_verification"
   | "get_inbox"
   | "reply_to_customer"
-  | "set_autopilot";
+  | "set_autopilot"
+  | "list_team_members"
+  | "add_team_member"
+  | "set_team_member_role"
+  | "remove_team_member"
+  | "get_content_library"
+  | "add_to_library"
+  | "remove_from_library"
+  | "plan_calendar_week"
+  | "get_calendar_slots";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -633,6 +645,132 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
       if (typeof input.enabled !== "boolean") throw new Error('"enabled" must be true or false.');
       return { wouldSetAutopilot: input.enabled };
     },
+  },
+
+  list_team_members: {
+    description: "Lists all accounts that have access to this business, including their role (owner or staff) and when they joined.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b) => listTeamMembers(b.id),
+    preview: async (b) => listTeamMembers(b.id),
+  },
+
+  add_team_member: {
+    description: 'Grants an existing account access to this business by email. The account must already exist (they must sign up first). Optionally pass role: "owner" or "staff" (default: staff).',
+    riskLevel: "medium",
+    approvalRequired: false,
+    run: async (b, input) => {
+      if (typeof input.email !== "string" || !input.email.trim()) throw new Error('"email" is required.');
+      const role = input.role === "owner" ? "owner" : "staff";
+      await addTeamMember(b.id, input.email as string, role);
+      return { added: true, email: input.email, role };
+    },
+    preview: async (_b, input) => {
+      if (typeof input.email !== "string" || !input.email.trim()) throw new Error('"email" is required.');
+      return { wouldAdd: input.email, role: input.role === "owner" ? "owner" : "staff" };
+    },
+  },
+
+  set_team_member_role: {
+    description: 'Changes an existing team member\'s role. Pass accountId (UUID) and role: "owner" or "staff".',
+    riskLevel: "medium",
+    approvalRequired: false,
+    run: async (b, input) => {
+      if (typeof input.accountId !== "string") throw new Error('"accountId" is required.');
+      const role = input.role === "owner" ? "owner" : "staff";
+      await setTeamMemberRole(b.id, input.accountId as string, role);
+      return { updated: true, accountId: input.accountId, role };
+    },
+    preview: async (_b, input) => ({ wouldSetRole: input.role, accountId: input.accountId }),
+  },
+
+  remove_team_member: {
+    description: "Removes a team member's access to this business. Does not delete their account. Pass accountId (UUID).",
+    riskLevel: "medium",
+    approvalRequired: false,
+    run: async (b, input) => {
+      if (typeof input.accountId !== "string") throw new Error('"accountId" is required.');
+      await removeTeamMember(b.id, input.accountId as string);
+      return { removed: true, accountId: input.accountId };
+    },
+    preview: async (_b, input) => ({ wouldRemove: input.accountId }),
+  },
+
+  get_content_library: {
+    description: "Returns all reusable content items in this business's organization library — captions, media URLs, and which platforms each is intended for.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b) => {
+      const org = await getOrganizationForBusiness(b);
+      if (!org) throw new Error("This business has no organization — content library requires an org.");
+      return listLibraryItems(org.id);
+    },
+    preview: async (b) => {
+      const org = await getOrganizationForBusiness(b);
+      if (!org) throw new Error("This business has no organization — content library requires an org.");
+      return listLibraryItems(org.id);
+    },
+  },
+
+  add_to_library: {
+    description: 'Adds a reusable content item to this org\'s library. Required: caption (string), platforms (string[]). Optional: mediaUrl, mediaType ("image"|"video").',
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b, input) => {
+      if (typeof input.caption !== "string" || !input.caption.trim()) throw new Error('"caption" is required.');
+      if (!Array.isArray(input.platforms) || input.platforms.length === 0) throw new Error('"platforms" must be a non-empty array.');
+      const org = await getOrganizationForBusiness(b);
+      if (!org) throw new Error("This business has no organization — content library requires an org.");
+      return addLibraryItem(
+        org.id,
+        input.caption as string,
+        input.platforms as string[],
+        typeof input.mediaUrl === "string" ? input.mediaUrl : null,
+        input.mediaType === "video" ? "video" : input.mediaType === "image" ? "image" : null,
+      );
+    },
+    preview: async (_b, input) => ({ wouldAdd: { caption: input.caption, platforms: input.platforms } }),
+  },
+
+  remove_from_library: {
+    description: "Removes a content library item by its ID. Pass itemId (UUID).",
+    riskLevel: "medium",
+    approvalRequired: false,
+    run: async (b, input) => {
+      if (typeof input.itemId !== "string") throw new Error('"itemId" is required.');
+      const org = await getOrganizationForBusiness(b);
+      if (!org) throw new Error("This business has no organization — content library requires an org.");
+      await removeLibraryItem(org.id, input.itemId as string);
+      return { removed: true, itemId: input.itemId };
+    },
+    preview: async (_b, input) => ({ wouldRemove: input.itemId }),
+  },
+
+  plan_calendar_week: {
+    description: "Plans this week's calendar slots based on the business's posting cadence, spreading posts evenly across connected platforms. Idempotent — safe to call again if slots already exist.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b) => {
+      const { data: connections } = await supabase.from("platform_connection").select("platform").eq("business_id", b.id).eq("status", "connected");
+      const platforms = ((connections ?? []) as { platform: string }[]).map((c) => c.platform as import("../types.js").Platform);
+      await planWeek(b, platforms);
+      const slots = await getSlotsForWeek(b.id);
+      return { slots };
+    },
+    preview: async (b) => {
+      const { data: connections } = await supabase.from("platform_connection").select("platform").eq("business_id", b.id).eq("status", "connected");
+      const platforms = ((connections ?? []) as { platform: string }[]).map((c) => c.platform as import("../types.js").Platform);
+      const { cadenceSlotsPerWeek } = await import("../lib/contentCalendar.js");
+      return { wouldPlanSlots: cadenceSlotsPerWeek(b), platforms };
+    },
+  },
+
+  get_calendar_slots: {
+    description: "Returns all content calendar slots for the current week for this business — planned, approved, and posted.",
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b) => getSlotsForWeek(b.id),
+    preview: async (b) => getSlotsForWeek(b.id),
   },
 };
 
