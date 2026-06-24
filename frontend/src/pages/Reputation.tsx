@@ -3,6 +3,7 @@ import { callTool } from "../api";
 import { Card } from "../components/Card";
 import { Tabs } from "../components/Tabs";
 import { DataTable } from "../components/DataTable";
+import { FormField } from "../components/FormField";
 import { useTab } from "../useTab";
 
 const TABS = [
@@ -36,6 +37,10 @@ function SentimentTab({ onError }: { onError: (msg: string) => void }) {
 
 function ReviewsTab({ onError }: { onError: (msg: string) => void }) {
   const [reviews, setReviews] = useState<any[] | null>(null);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replying, setReplying] = useState(false);
+  const [replyDone, setReplyDone] = useState<Record<string, boolean>>({});
 
   async function load() {
     onError("");
@@ -47,10 +52,26 @@ function ReviewsTab({ onError }: { onError: (msg: string) => void }) {
     }
   }
 
+  async function submitReply(reviewId: string) {
+    if (!replyText.trim()) { onError("Enter a reply first."); return; }
+    onError("");
+    setReplying(true);
+    try {
+      await callTool("reply_to_review", { reviewId, responseText: replyText.trim() });
+      setReplyDone((prev) => ({ ...prev, [reviewId]: true }));
+      setReplyingTo(null);
+      setReplyText("");
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReplying(false);
+    }
+  }
+
   return (
     <div className="grid">
-      <Card title="Unresolved reviews" hint="Pulled from the operator snapshot — same data shown on the Dashboard.">
-        <button onClick={load}>Load unresolved reviews</button>
+      <Card title="Unresolved reviews" hint="Pulled from the operator snapshot.">
+        <button onClick={load}>Load reviews</button>
         {reviews && (
           <DataTable
             emptyMessage="None unresolved."
@@ -59,8 +80,39 @@ function ReviewsTab({ onError }: { onError: (msg: string) => void }) {
               { key: "rating", label: "Rating", render: (r: any) => r.rating ?? "—" },
               { key: "customerName", label: "Customer", render: (r: any) => r.customerName ?? "anonymous" },
               { key: "text", label: "Review", render: (r: any) => r.text ?? "" },
+              {
+                key: "reply",
+                label: "",
+                render: (r: any) => {
+                  const id = r.id;
+                  if (replyDone[id]) return <span className="muted" style={{ fontSize: "0.75rem" }}>replied</span>;
+                  return (
+                    <button onClick={() => { setReplyingTo(id); setReplyText(""); }}>
+                      Reply
+                    </button>
+                  );
+                },
+              },
             ]}
           />
+        )}
+        {replyingTo && (
+          <div style={{ marginTop: "1rem" }}>
+            <FormField label="Your response">
+              <textarea
+                rows={3}
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="Thank you for your feedback…"
+              />
+            </FormField>
+            <div className="row">
+              <button disabled={replying} onClick={() => submitReply(replyingTo)}>
+                {replying ? "Posting…" : "Post response"}
+              </button>
+              <button className="secondary" onClick={() => setReplyingTo(null)}>Cancel</button>
+            </div>
+          </div>
         )}
       </Card>
     </div>
@@ -98,7 +150,7 @@ function DuplicatesTab({ onError }: { onError: (msg: string) => void }) {
         <div>{reputationResult}</div>
       </Card>
 
-      <Card title="Listing sync" hint="Pushes the business's canonical name/address/phone out to connected platforms (GBP today). Closely related to duplicate-listing cleanup, so it lives here.">
+      <Card title="Listing sync" hint="Pushes the business's canonical name/address/phone out to connected platforms.">
         <button onClick={syncListingInfo}>Sync listing info</button>
         <div>{syncResult}</div>
       </Card>

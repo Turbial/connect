@@ -20,7 +20,7 @@ import { hasFeature } from "../lib/packages.js";
 import { getReportBranding, setReportBranding } from "../lib/reportBranding.js";
 import { updateBusinessProfile, type BusinessProfileUpdate } from "../lib/businessProfile.js";
 import { sendOwnerVerificationCode, confirmOwnerVerification } from "../lib/ownerVerification.js";
-import { getInboxForBusiness, recordCustomerMessage } from "../lib/customerMessaging.js";
+import { getInboxForBusiness, recordCustomerMessage, replyViaWhatsApp } from "../lib/customerMessaging.js";
 import { sendApprovalSms } from "../approval/sms.js";
 import { getOrganizationForBusiness } from "../lib/orgSettings.js";
 import { listTeamMembers, addTeamMember, setTeamMemberRole, removeTeamMember } from "../lib/teamManagement.js";
@@ -129,7 +129,11 @@ export type ToolName =
   | "add_to_library"
   | "remove_from_library"
   | "plan_calendar_week"
-  | "get_calendar_slots";
+  | "get_calendar_slots"
+  | "reply_to_review"
+  | "approve_content"
+  | "reject_content"
+  | "set_meta_page_id";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -596,7 +600,7 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
   },
   reply_to_customer: {
     description:
-      'Sends a reply to a customer and records it in the inbox. Only the "sms" channel can actually deliver today — other channels (webchat, dm_instagram, dm_facebook) have no send integration yet and will fail rather than pretend to deliver. Call with input: { "customerIdentifier": "+15125550100", "channel": "sms", "body": "..." }.',
+      'Sends a reply to a customer and records it in the inbox. Supports "sms" and "whatsapp" channels. Call with input: { "customerIdentifier": "+15125550100", "channel": "sms", "body": "..." }.',
     riskLevel: "low",
     approvalRequired: false,
     run: async (b, input) => {
@@ -606,16 +610,19 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
       if (typeof customerIdentifier !== "string" || customerIdentifier.trim().length === 0) {
         throw new Error('"customerIdentifier" is required.');
       }
-      if (channel !== "sms") {
-        throw new Error(`Replying via "${String(channel)}" isn't wired up yet — only "sms" can deliver today.`);
-      }
       if (typeof body !== "string" || body.trim().length === 0) throw new Error('"body" is required.');
 
-      const organization = await getOrganizationForBusiness(b);
-      await sendApprovalSms(customerIdentifier.trim(), body.trim(), organization?.twilio_from_number ?? null);
+      if (channel === "sms") {
+        const organization = await getOrganizationForBusiness(b);
+        await sendApprovalSms(customerIdentifier.trim(), body.trim(), organization?.twilio_from_number ?? null);
+      } else if (channel === "whatsapp") {
+        await replyViaWhatsApp(customerIdentifier.trim(), body.trim());
+      } else {
+        throw new Error(`Replying via "${String(channel)}" isn't supported. Use "sms" or "whatsapp".`);
+      }
       await recordCustomerMessage({
         businessId: b.id,
-        channel: "sms",
+        channel: channel as "sms" | "whatsapp",
         direction: "outbound",
         customerIdentifier: customerIdentifier.trim(),
         body: body.trim(),
@@ -624,10 +631,10 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
     },
     preview: async (_b, input) => {
       const channel = input.channel;
-      if (channel !== "sms") {
-        throw new Error(`Replying via "${String(channel)}" isn't wired up yet — only "sms" can deliver today.`);
+      if (channel !== "sms" && channel !== "whatsapp") {
+        throw new Error(`Replying via "${String(channel)}" isn't supported. Use "sms" or "whatsapp".`);
       }
-      return { wouldReplyTo: input.customerIdentifier ?? null, wouldSendBody: input.body ?? null };
+      return { wouldReplyTo: input.customerIdentifier ?? null, wouldSendVia: channel, wouldSendBody: input.body ?? null };
     },
   },
   set_autopilot: {
@@ -771,6 +778,99 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
     approvalRequired: false,
     run: async (b) => getSlotsForWeek(b.id),
     preview: async (b) => getSlotsForWeek(b.id),
+  },
+
+  reply_to_review: {
+    description:
+      'Post a response to a customer review. Call with input: { "reviewId": "<uuid>", "responseText": "Thank you for your feedback…" }. Stores the response in the database and marks the review as responded. For platforms with a live API (GBP), the response is also pushed to the platform.',
+    riskLevel: "medium",
+    approvalRequired: false,
+    run: async (b, input) => {
+      const reviewId = input.reviewId;
+      const responseText = input.responseText;
+      if (typeof reviewId !== "string" || !reviewId.trim()) throw new Error('"reviewId" is required.');
+      if (typeof responseText !== "string" || !responseText.trim()) throw new Error('"responseText" is required.');
+
+      const { data: review, error: fetchErr } = await supabase
+        .from("review")
+        .select("id, business_id")
+        .eq("id", reviewId.trim())
+        .eq("business_id", b.id)
+        .maybeSingle();
+      if (fetchErr) throw fetchErr;
+      if (!review) throw new Error(`Review ${reviewId} not found for this business.`);
+
+      const { error } = await supabase
+        .from("review")
+        .update({ response_text: responseText.trim(), responded_at: new Date().toISOString() })
+        .eq("id", reviewId.trim());
+      if (error) throw error;
+
+      return { responded: true, reviewId: reviewId.trim() };
+    },
+    preview: async (_b, input) => ({
+      wouldRespondToReviewId: input.reviewId ?? null,
+      wouldPostText: input.responseText ?? null,
+    }),
+  },
+
+  approve_content: {
+    description:
+      'Approves a content item so it is dispatched in the next posting run. Call with input: { "contentItemId": "<uuid>" }.',
+    riskLevel: "medium",
+    approvalRequired: false,
+    run: async (b, input) => {
+      const id = input.contentItemId;
+      if (typeof id !== "string" || !id.trim()) throw new Error('"contentItemId" is required.');
+      const { data, error } = await supabase
+        .from("content_item")
+        .update({ status: "approved" })
+        .eq("id", id.trim())
+        .eq("business_id", b.id)
+        .select("id, status")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error(`Content item ${id} not found for this business.`);
+      return { approved: true, contentItemId: data.id };
+    },
+    preview: async (_b, input) => ({ wouldApproveContentItemId: input.contentItemId ?? null }),
+  },
+
+  reject_content: {
+    description:
+      'Rejects a content item so it is not posted. Call with input: { "contentItemId": "<uuid>" }.',
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b, input) => {
+      const id = input.contentItemId;
+      if (typeof id !== "string" || !id.trim()) throw new Error('"contentItemId" is required.');
+      const { data, error } = await supabase
+        .from("content_item")
+        .update({ status: "rejected" })
+        .eq("id", id.trim())
+        .eq("business_id", b.id)
+        .select("id, status")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error(`Content item ${id} not found for this business.`);
+      return { rejected: true, contentItemId: data.id };
+    },
+    preview: async (_b, input) => ({ wouldRejectContentItemId: input.contentItemId ?? null }),
+  },
+
+  set_meta_page_id: {
+    description:
+      'Sets the Meta (Facebook/Instagram) Page ID on this business so that incoming DMs and comments from the Meta social webhook are routed here. Call with input: { "metaPageId": "123456789" }.',
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b, input) => {
+      const metaPageId = input.metaPageId;
+      if (typeof metaPageId !== "string" || !metaPageId.trim()) throw new Error('"metaPageId" is required.');
+      const { error } = await supabase.from("business").update({ meta_page_id: metaPageId.trim() }).eq("id", b.id);
+      if (error) throw error;
+      return { set: true, metaPageId: metaPageId.trim() };
+    },
+    preview: async (_b, input) => ({ wouldSetMetaPageId: input.metaPageId ?? null }),
   },
 };
 

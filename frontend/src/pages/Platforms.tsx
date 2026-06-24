@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { callTool, getCredentialFields, apiFetch } from "../api";
+import { callTool, getCredentialFields, apiFetch, state } from "../api";
 import { Card } from "../components/Card";
 import { Tabs } from "../components/Tabs";
 import { DataTable } from "../components/DataTable";
@@ -11,6 +11,7 @@ const TABS = [
   { key: "connections", label: "Connections" },
   { key: "coverage", label: "Platform Coverage" },
   { key: "credentials", label: "Credentials" },
+  { key: "meta", label: "Meta Setup" },
 ];
 
 function statusTag(status: string, actionRequired?: boolean) {
@@ -25,6 +26,12 @@ const TIER_VARIANT: Record<string, "ok" | "warn" | "bad" | "neutral"> = {
   stub: "neutral",
 };
 
+const OAUTH_PLATFORMS = [
+  { id: "google", label: "Google (GBP)", icon: "G" },
+  { id: "facebook", label: "Facebook", icon: "f" },
+  { id: "instagram", label: "Instagram", icon: "IG" },
+];
+
 function ConnectionsTab({ onError }: { onError: (msg: string) => void }) {
   const [connections, setConnections] = useState<any[] | null>(null);
 
@@ -38,9 +45,17 @@ function ConnectionsTab({ onError }: { onError: (msg: string) => void }) {
     }
   }
 
+  function startOAuth(platform: string) {
+    const bId = state.businessId;
+    if (!bId) { onError("No business loaded."); return; }
+    const apiKey = state.apiKey;
+    const base = window.location.origin;
+    window.location.href = `${base}/oauth/start/${platform}?businessId=${encodeURIComponent(bId)}&token=${encodeURIComponent(apiKey)}`;
+  }
+
   return (
     <div className="grid">
-      <Card title="Connection health" hint="Per-platform connection status, flagging which need reconnection.">
+      <Card title="Connection health" hint="Per-platform connection status.">
         <button onClick={load}>Load connection health</button>
         {connections && (
           <DataTable
@@ -52,6 +67,16 @@ function ConnectionsTab({ onError }: { onError: (msg: string) => void }) {
             ]}
           />
         )}
+      </Card>
+
+      <Card title="Connect via OAuth" hint="One-click OAuth for supported platforms. You'll be redirected to the platform and back.">
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          {OAUTH_PLATFORMS.map((p) => (
+            <button key={p.id} className="secondary" onClick={() => startOAuth(p.id)}>
+              Connect with {p.label}
+            </button>
+          ))}
+        </div>
       </Card>
     </div>
   );
@@ -144,9 +169,9 @@ function CredentialsTab({ onError }: { onError: (msg: string) => void }) {
 
   return (
     <div className="grid">
-      <Card title="Platform credentials">
+      <Card title="Platform credentials" hint="Manual credential entry. Use the Connections tab for OAuth-supported platforms instead.">
         <div className="row">
-          <input type="text" placeholder="platform, e.g. facebook" value={platform} onChange={(e) => setPlatform(e.target.value)} />
+          <input type="text" placeholder="platform, e.g. yelp" value={platform} onChange={(e) => setPlatform(e.target.value)} />
           <button onClick={lookupFields}>Lookup fields</button>
         </div>
         {fields?.map((f) => (
@@ -165,6 +190,46 @@ function CredentialsTab({ onError }: { onError: (msg: string) => void }) {
   );
 }
 
+function MetaSetupTab({ onError }: { onError: (msg: string) => void }) {
+  const [pageId, setPageId] = useState("");
+  const [result, setResult] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!pageId.trim()) { onError("Enter a Meta Page ID."); return; }
+    onError("");
+    setSaving(true);
+    try {
+      await callTool("set_meta_page_id", { metaPageId: pageId.trim() });
+      setResult(`Meta Page ID set to "${pageId.trim()}".`);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="grid">
+      <Card
+        title="Meta Page ID"
+        hint="Links your Facebook/Instagram page to this business so incoming DMs and comments from the Meta webhook are routed here. Find your Page ID in Meta Business Suite → Settings → Page Info."
+      >
+        <FormField label="Meta Page ID">
+          <input
+            type="text"
+            placeholder="e.g. 123456789012345"
+            value={pageId}
+            onChange={(e) => setPageId(e.target.value)}
+          />
+        </FormField>
+        <button disabled={saving} onClick={save}>{saving ? "Saving…" : "Save"}</button>
+        {result && <p className="muted" style={{ marginTop: "0.5rem" }}>{result}</p>}
+      </Card>
+    </div>
+  );
+}
+
 export function Platforms({ onError }: { onError: (msg: string) => void }) {
   const [tab, setTab] = useTab("connections");
 
@@ -174,6 +239,7 @@ export function Platforms({ onError }: { onError: (msg: string) => void }) {
       {tab === "connections" && <ConnectionsTab onError={onError} />}
       {tab === "coverage" && <CoverageTab onError={onError} />}
       {tab === "credentials" && <CredentialsTab onError={onError} />}
+      {tab === "meta" && <MetaSetupTab onError={onError} />}
     </div>
   );
 }

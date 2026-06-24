@@ -3,6 +3,7 @@ import { callTool } from "../api";
 import { Card } from "../components/Card";
 import { Tag } from "../components/Tag";
 import { DataTable } from "../components/DataTable";
+import { Notice } from "../components/Notice";
 
 function statusTag(status: string, actionRequired?: boolean) {
   const variant = actionRequired ? "bad" : status === "verified" ? "ok" : "warn";
@@ -11,6 +12,7 @@ function statusTag(status: string, actionRequired?: boolean) {
 
 export function Dashboard({ onError, onLoaded }: { onError: (msg: string) => void; onLoaded: (businessName: string) => void }) {
   const [snapshot, setSnapshot] = useState<any>(null);
+  const [approvalAction, setApprovalAction] = useState<Record<string, "approving" | "rejecting" | "done">>({});
 
   async function load() {
     onError("");
@@ -30,6 +32,19 @@ export function Dashboard({ onError, onLoaded }: { onError: (msg: string) => voi
       setSnapshot((prev: any) => ({ ...prev, visibilityScore: output }));
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function actOnApproval(contentItemId: string, action: "approve_content" | "reject_content") {
+    onError("");
+    setApprovalAction((prev) => ({ ...prev, [contentItemId]: action === "approve_content" ? "approving" : "rejecting" }));
+    try {
+      await callTool(action, { contentItemId });
+      setApprovalAction((prev) => ({ ...prev, [contentItemId]: "done" }));
+      await load();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+      setApprovalAction((prev) => { const n = { ...prev }; delete n[contentItemId]; return n; });
     }
   }
 
@@ -91,6 +106,32 @@ export function Dashboard({ onError, onLoaded }: { onError: (msg: string) => voi
           columns={[
             { key: "channel", label: "Channel" },
             { key: "sentAt", label: "Sent at" },
+            {
+              key: "actions",
+              label: "",
+              render: (item: any) => {
+                const id = item.content_item_id ?? item.id;
+                const state = approvalAction[id];
+                if (state === "done") return <Tag variant="ok">done</Tag>;
+                return (
+                  <div className="row" style={{ margin: 0, gap: "0.4rem" }}>
+                    <button
+                      disabled={!!state}
+                      onClick={() => actOnApproval(id, "approve_content")}
+                    >
+                      {state === "approving" ? "…" : "Approve"}
+                    </button>
+                    <button
+                      className="danger"
+                      disabled={!!state}
+                      onClick={() => actOnApproval(id, "reject_content")}
+                    >
+                      {state === "rejecting" ? "…" : "Reject"}
+                    </button>
+                  </div>
+                );
+              },
+            },
           ]}
         />
       </Card>

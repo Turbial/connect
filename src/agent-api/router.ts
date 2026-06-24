@@ -12,7 +12,10 @@ export type Route =
   | { kind: "confirm_owner_verification"; businessId: string }
   | { kind: "extract_brand"; businessId: string }
   | { kind: "signup" }
-  | { kind: "login" };
+  | { kind: "login" }
+  | { kind: "oauth_start"; platform: string }
+  | { kind: "oauth_callback"; platform: string }
+  | { kind: "upload" };
 
 /** Phase 10: pure request-path matching for the agent API, kept separate
  * from the http server itself so routing logic is unit-testable without
@@ -51,6 +54,18 @@ export function matchRoute(method: string, path: string): Route | null {
   if (method === "POST" && brandExtractMatch) {
     return { kind: "extract_brand", businessId: brandExtractMatch[1] };
   }
+
+  const oauthStartMatch = /^\/oauth\/start\/([a-z]+)$/.exec(normalizedPath);
+  if (method === "GET" && oauthStartMatch) {
+    return { kind: "oauth_start", platform: oauthStartMatch[1] };
+  }
+
+  const oauthCallbackMatch = /^\/oauth\/callback\/([a-z]+)$/.exec(normalizedPath);
+  if (method === "GET" && oauthCallbackMatch) {
+    return { kind: "oauth_callback", platform: oauthCallbackMatch[1] };
+  }
+
+  if (method === "POST" && normalizedPath === "/upload") return { kind: "upload" };
 
   return null;
 }

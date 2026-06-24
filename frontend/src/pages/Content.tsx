@@ -127,6 +127,7 @@ function LibraryTab({ onError }: { onError: (msg: string) => void }) {
   const [mediaType, setMediaType] = useState("image");
   const [platforms, setPlatforms] = useState("");
   const [addResult, setAddResult] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   async function load() {
     onError("");
@@ -135,6 +136,32 @@ function LibraryTab({ onError }: { onError: (msg: string) => void }) {
       setItems(output ?? []);
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleFileUpload(file: File) {
+    onError("");
+    setUploading(true);
+    try {
+      const res = await fetch("/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": file.type,
+          Authorization: `Bearer ${(await import("../api")).state.apiKey}`,
+        },
+        body: file,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error ?? "Upload failed");
+      }
+      const { url } = await res.json();
+      setMediaUrl(url);
+      setMediaType(file.type.startsWith("video/") ? "video" : "image");
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -180,13 +207,21 @@ function LibraryTab({ onError }: { onError: (msg: string) => void }) {
             columns={[
               { key: "caption", label: "Caption", render: (i: any) => i.caption.slice(0, 80) },
               { key: "platforms", label: "Platforms", render: (i: any) => (i.platforms ?? []).join(", ") },
-              { key: "mediaType", label: "Media", render: (i: any) => i.mediaType ?? "—" },
+              {
+                key: "mediaType",
+                label: "Media",
+                render: (i: any) => i.mediaUrl
+                  ? i.mediaType === "video"
+                    ? <a href={i.mediaUrl} target="_blank" rel="noreferrer" className="muted">video</a>
+                    : <img src={i.mediaUrl} alt="" style={{ height: 36, borderRadius: 4, objectFit: "cover" }} />
+                  : <span className="muted">—</span>,
+              },
               { key: "createdAt", label: "Added", render: (i: any) => new Date(i.createdAt).toLocaleDateString() },
               {
                 key: "actions",
                 label: "",
                 render: (i: any) => (
-                  <button onClick={() => remove(i.id)}>Remove</button>
+                  <button className="danger" onClick={() => remove(i.id)}>Remove</button>
                 ),
               },
             ]}
@@ -201,9 +236,25 @@ function LibraryTab({ onError }: { onError: (msg: string) => void }) {
         <FormField label="Platforms">
           <input type="text" placeholder="instagram, facebook, tiktok" value={platforms} onChange={(e) => setPlatforms(e.target.value)} />
         </FormField>
+        <FormField label="Upload image / video">
+          <input
+            type="file"
+            accept="image/*,video/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFileUpload(file);
+            }}
+          />
+          {uploading && <span className="muted"><span className="spinner" />Uploading…</span>}
+          {mediaUrl && !uploading && (
+            <span className="muted" style={{ fontSize: "0.75rem", wordBreak: "break-all" }}>
+              {mediaUrl.length > 60 ? mediaUrl.slice(0, 60) + "…" : mediaUrl}
+            </span>
+          )}
+        </FormField>
         <div className="row">
-          <FormField label="Media URL (optional)">
-            <input type="text" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} />
+          <FormField label="Or paste a URL">
+            <input type="text" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="https://…" />
           </FormField>
           <FormField label="Type">
             <select value={mediaType} onChange={(e) => setMediaType(e.target.value)}>
@@ -221,6 +272,7 @@ function LibraryTab({ onError }: { onError: (msg: string) => void }) {
 
 function ApprovalsTab({ onError }: { onError: (msg: string) => void }) {
   const [approvals, setApprovals] = useState<any[] | null>(null);
+  const [actionState, setActionState] = useState<Record<string, "working" | "done_approve" | "done_reject">>({});
 
   async function load() {
     onError("");
@@ -232,17 +284,50 @@ function ApprovalsTab({ onError }: { onError: (msg: string) => void }) {
     }
   }
 
+  async function act(contentItemId: string, tool: "approve_content" | "reject_content") {
+    onError("");
+    setActionState((p) => ({ ...p, [contentItemId]: "working" }));
+    try {
+      await callTool(tool, { contentItemId });
+      setActionState((p) => ({ ...p, [contentItemId]: tool === "approve_content" ? "done_approve" : "done_reject" }));
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+      setActionState((p) => { const n = { ...p }; delete n[contentItemId]; return n; });
+    }
+  }
+
   return (
     <div className="grid">
-      <Card title="Pending approvals" hint="Content items currently awaiting owner approval.">
+      <Card title="Pending approvals" hint="Approve or reject content directly here — no SMS required.">
         <button onClick={load}>Load pending approvals</button>
         {approvals && (
           <DataTable
             emptyMessage="Nothing pending."
             rows={approvals}
             columns={[
+              { key: "caption", label: "Content", render: (a: any) => a.caption ? a.caption.slice(0, 60) + (a.caption.length > 60 ? "…" : "") : <em className="muted">no caption</em> },
               { key: "channel", label: "Channel" },
               { key: "sentAt", label: "Sent at" },
+              {
+                key: "actions",
+                label: "",
+                render: (a: any) => {
+                  const id = a.content_item_id ?? a.id;
+                  const s = actionState[id];
+                  if (s === "done_approve") return <Tag variant="ok">approved</Tag>;
+                  if (s === "done_reject") return <Tag variant="bad">rejected</Tag>;
+                  return (
+                    <div className="row" style={{ margin: 0, gap: "0.4rem" }}>
+                      <button disabled={s === "working"} onClick={() => act(id, "approve_content")}>
+                        {s === "working" ? "…" : "Approve"}
+                      </button>
+                      <button className="danger" disabled={s === "working"} onClick={() => act(id, "reject_content")}>
+                        {s === "working" ? "…" : "Reject"}
+                      </button>
+                    </div>
+                  );
+                },
+              },
             ]}
           />
         )}

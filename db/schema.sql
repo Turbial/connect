@@ -865,3 +865,7 @@ alter table sentiment_trend add column if not exists nlp_positive_pct integer;
 -- Phase 19: Meta social webhook needs page id to route DMs/comments to
 -- the right business.
 alter table business add column if not exists meta_page_id text;
+
+-- ── Phase 20: review responses ───────────────────────────────────────────────
+alter table review add column if not exists response_text text;
+alter table review add column if not exists responded_at timestamptz;

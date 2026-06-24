@@ -1,4 +1,5 @@
 import type { Business, ContentItem } from "../types.js";
+import { decryptCredential } from "../lib/platformCredentials.js";
 
 /**
  * Google deprecated most of the original Local Posts API in 2024 and access now
@@ -24,14 +25,15 @@ export interface GbpPostResult {
 async function getAccessToken(business: Business): Promise<string> {
   const clientId = process.env.GBP_CLIENT_ID;
   const clientSecret = process.env.GBP_CLIENT_SECRET;
-  if (clientId && clientSecret && business.gbp_refresh_token) {
+  const gbpRefreshToken = decryptCredential(business.gbp_refresh_token);
+  if (clientId && clientSecret && gbpRefreshToken) {
     const res = await fetch(TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         client_id: clientId,
         client_secret: clientSecret,
-        refresh_token: business.gbp_refresh_token,
+        refresh_token: gbpRefreshToken,
         grant_type: "refresh_token",
       }),
     });
@@ -43,10 +45,11 @@ async function getAccessToken(business: Business): Promise<string> {
     // possibly-stale token than fail outright when refresh itself errors.
   }
 
-  if (!business.gbp_access_token) {
+  const token = decryptCredential(business.gbp_access_token);
+  if (!token) {
     throw new Error(`Business ${business.id} has no GBP access token`);
   }
-  return business.gbp_access_token;
+  return token;
 }
 
 export async function postToGbp(business: Business, item: ContentItem): Promise<GbpPostResult> {

@@ -1,6 +1,7 @@
 import { supabase } from "./supabase.js";
 import { upsertConnection } from "./platformConnection.js";
 import { genericAdapters } from "../distribution/genericAdapter.js";
+import { encrypt, decrypt, isEncrypted } from "./encryption.js";
 import type { Platform } from "../types.js";
 
 /** A handful of platforms split their credential across more than one
@@ -51,7 +52,7 @@ export async function setPlatformCredentials(
     if (!allowedFields.includes(field)) {
       throw new Error(`"${field}" is not a valid credential field for platform "${platform}". Valid fields: ${allowedFields.join(", ")}`);
     }
-    update[field] = value;
+    update[field] = process.env.ENCRYPTION_KEY ? encrypt(value) : value;
   }
   if (Object.keys(update).length === 0) {
     throw new Error(`No valid credential fields provided for platform "${platform}". Valid fields: ${allowedFields.join(", ")}`);
@@ -71,4 +72,18 @@ export async function setPlatformCredentials(
   });
 
   return { platform, fieldsSet: Object.keys(update) };
+}
+
+/** Reads a raw credential value from the business object and decrypts it if
+ * ENCRYPTION_KEY is set and the value looks like an encrypted blob. */
+export function decryptCredential(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  if (process.env.ENCRYPTION_KEY && isEncrypted(raw)) {
+    try {
+      return decrypt(raw);
+    } catch {
+      return raw;
+    }
+  }
+  return raw;
 }

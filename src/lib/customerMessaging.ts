@@ -87,3 +87,30 @@ export async function getLatestInboundChannel(businessId: string, customerIdenti
   if (error) throw error;
   return (data?.channel as CustomerMessage["channel"] | undefined) ?? null;
 }
+
+/** Send a WhatsApp reply via Twilio's WhatsApp sandbox/channel.
+ * Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER to
+ * be set — the from number is auto-prefixed with "whatsapp:" as Twilio
+ * requires. */
+export async function replyViaWhatsApp(to: string, body: string): Promise<void> {
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  const from = process.env.TWILIO_FROM_NUMBER;
+  if (!sid || !token || !from) throw new Error("TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER must be set");
+
+  const toWhatsapp = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
+  const fromWhatsapp = from.startsWith("whatsapp:") ? from : `whatsapp:${from}`;
+
+  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${sid}:${token}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({ To: toWhatsapp, From: fromWhatsapp, Body: body }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Twilio WhatsApp send failed (${res.status}): ${detail}`);
+  }
+}

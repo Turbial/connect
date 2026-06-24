@@ -695,7 +695,7 @@ export type MessageIntent = "lead_intent" | "question" | "complaint" | "other";
 export interface CustomerMessage {
   id: string;
   business_id: string;
-  channel: "sms" | "webchat" | "dm_instagram" | "dm_facebook" | "missed_call";
+  channel: "sms" | "whatsapp" | "webchat" | "dm_instagram" | "dm_facebook" | "missed_call";
   direction: "inbound" | "outbound";
   customer_identifier: string;
   body: string | null;

@@ -1,5 +1,6 @@
 import { safeFetch } from "../lib/safeFetch.js";
 import type { Business, ContentItem } from "../types.js";
+import { decryptCredential } from "../lib/platformCredentials.js";
 
 /**
  * YouTube Data API v3 resumable upload for Shorts. The Content Engine's
@@ -18,7 +19,8 @@ export interface YoutubePostResult {
 async function getAccessToken(business: Business): Promise<string> {
   const clientId = process.env.YOUTUBE_CLIENT_ID;
   const clientSecret = process.env.YOUTUBE_CLIENT_SECRET;
-  if (!clientId || !clientSecret || !business.youtube_refresh_token) {
+  const refreshToken = decryptCredential(business.youtube_refresh_token);
+  if (!clientId || !clientSecret || !refreshToken) {
     throw new Error(`Business ${business.id} has no YouTube OAuth credentials`);
   }
 
@@ -28,7 +30,7 @@ async function getAccessToken(business: Business): Promise<string> {
     body: new URLSearchParams({
       client_id: clientId,
       client_secret: clientSecret,
-      refresh_token: business.youtube_refresh_token,
+      refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
   });

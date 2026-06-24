@@ -453,3 +453,69 @@ em.muted { font-style: normal; }
   vertical-align: middle;
   margin-right: 0.3rem;
 }
+
+/* ── Mobile responsive ───────────────────────────────────────────────── */
+
+/* Table scroll wrapper — applied via JS or add .table-scroll class */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* File input styling */
+input[type="file"] {
+  background: transparent;
+  border: 1px dashed var(--border);
+  padding: 0.45rem 0.65rem;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+input[type="file"]:hover { border-color: var(--accent); }
+
+@media (max-width: 640px) {
+  /* Sticky header: tighter on mobile */
+  header { padding: 0.5rem 1rem; }
+  header h1 { font-size: 1rem; }
+
+  /* Main content: tighter padding */
+  main { padding: 1rem 0.75rem; }
+
+  /* Grid: always single column */
+  .grid { grid-template-columns: 1fr; }
+
+  /* Rows: stack vertically */
+  .row { flex-direction: column; align-items: stretch; }
+  .row > * { width: 100%; }
+
+  /* Nav: horizontal scroll, no wrapping */
+  .nav { overflow-x: auto; flex-wrap: nowrap; padding: 0 0.5rem; }
+  .nav a { padding: 0.6rem 0.5rem; font-size: 0.78rem; white-space: nowrap; }
+
+  /* Tabs: horizontal scroll */
+  .tabs { overflow-x: auto; flex-wrap: nowrap; }
+  .tab { white-space: nowrap; padding: 0.5rem 0.75rem; }
+
+  /* Tables: scroll on overflow */
+  table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Auth shell: no extra padding */
+  .auth-shell { padding: 1rem; }
+  .auth-card { max-width: 100%; }
+
+  /* Page header: stack */
+  .page-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+  .page-header-actions { width: 100%; }
+  .page-header-actions button { flex: 1; }
+
+  /* Steps: wrap + smaller */
+  .steps { gap: 0.25rem; }
+  .step { font-size: 0.72rem; padding: 0.3rem 0.65rem; }
+
+  /* Auth bar: compact */
+  .auth-bar { gap: 0.25rem; }
+  .auth-bar span { display: none; }
+
+  /* Billing plans: single column forced */
+  .plans-grid { grid-template-columns: 1fr; }
+
+  /* DataTable action buttons: smaller */
+  td button { padding: 0.3rem 0.6rem; font-size: 0.78rem; }
+}

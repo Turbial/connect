@@ -265,6 +265,109 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
     return;
   }
 
+  if (route.kind === "oauth_start") {
+    const { buildOAuthUrl } = await import("../lib/oauthFlow.js");
+    const platform = route.platform as import("../lib/oauthFlow.js").OAuthPlatform;
+    const validPlatforms = ["google", "facebook", "instagram"] as const;
+    if (!(validPlatforms as readonly string[]).includes(platform)) {
+      sendJson(res, 400, { error: `Unsupported OAuth platform "${platform}". Supported: ${validPlatforms.join(", ")}` });
+      return;
+    }
+    const businessId = new URL(req.url ?? "/", "http://x").searchParams.get("businessId");
+    if (!businessId) {
+      sendJson(res, 400, { error: '"businessId" query param is required' });
+      return;
+    }
+    if (!(await authorizeBusiness(businessId))) {
+      sendJson(res, 403, { error: "Forbidden" });
+      return;
+    }
+    try {
+      const state = Buffer.from(JSON.stringify({ platform, businessId })).toString("base64url");
+      const url = buildOAuthUrl(platform, state);
+      res.writeHead(302, { Location: url }).end();
+    } catch (err) {
+      sendJson(res, 500, { error: err instanceof Error ? err.message : "OAuth start failed" });
+    }
+    return;
+  }
+
+  if (route.kind === "oauth_callback") {
+    const { exchangeCodeForTokens, tokenColumnsFor } = await import("../lib/oauthFlow.js");
+    const qs = new URL(req.url ?? "/", "http://x").searchParams;
+    const code = qs.get("code");
+    const stateRaw = qs.get("state");
+    const error = qs.get("error");
+    if (error) {
+      res.writeHead(302, { Location: "/#/platforms?oauth_error=" + encodeURIComponent(error) }).end();
+      return;
+    }
+    if (!code || !stateRaw) {
+      sendJson(res, 400, { error: "Missing code or state" });
+      return;
+    }
+    let state: { platform: import("../lib/oauthFlow.js").OAuthPlatform; businessId: string };
+    try {
+      state = JSON.parse(Buffer.from(stateRaw, "base64url").toString("utf8"));
+    } catch {
+      sendJson(res, 400, { error: "Invalid state" });
+      return;
+    }
+    if (!(await authorizeBusiness(state.businessId))) {
+      sendJson(res, 403, { error: "Forbidden" });
+      return;
+    }
+    try {
+      const tokens = await exchangeCodeForTokens(state.platform, code);
+      const cols = tokenColumnsFor(state.platform);
+      const update: Record<string, string> = { [cols.accessToken]: tokens.accessToken };
+      if (cols.refreshToken && tokens.refreshToken) update[cols.refreshToken] = tokens.refreshToken;
+      const { error: dbErr } = await supabase.from("business").update(update).eq("id", state.businessId);
+      if (dbErr) throw dbErr;
+      res.writeHead(302, { Location: `/#/platforms?oauth_success=${state.platform}` }).end();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "OAuth callback failed";
+      res.writeHead(302, { Location: `/#/platforms?oauth_error=${encodeURIComponent(msg)}` }).end();
+    }
+    return;
+  }
+
+  if (route.kind === "upload") {
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_KEY;
+    if (!supabaseUrl || !supabaseServiceKey) {
+      sendJson(res, 500, { error: "Storage not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY)" });
+      return;
+    }
+    const contentType = req.headers["content-type"] ?? "application/octet-stream";
+    if (!contentType.startsWith("image/") && !contentType.startsWith("video/")) {
+      sendJson(res, 400, { error: "Only image/* and video/* uploads are supported" });
+      return;
+    }
+    const ext = contentType.split("/")[1]?.split(";")[0] ?? "bin";
+    const fileName = `upload-${Date.now()}.${ext}`;
+    const chunks: Buffer[] = [];
+    await new Promise<void>((resolve, reject) => {
+      req.on("data", (chunk: Buffer) => chunks.push(chunk));
+      req.on("end", resolve);
+      req.on("error", reject);
+    });
+    const fileBuffer = Buffer.concat(chunks);
+    const storage = createClient(supabaseUrl, supabaseServiceKey).storage;
+    const { data, error: upErr } = await storage.from("connect-media").upload(fileName, fileBuffer, {
+      contentType,
+      upsert: false,
+    });
+    if (upErr) {
+      sendJson(res, 500, { error: upErr.message });
+      return;
+    }
+    const { data: urlData } = storage.from("connect-media").getPublicUrl(data.path);
+    sendJson(res, 200, { url: urlData.publicUrl, path: data.path });
+    return;
+  }
+
   // route.kind === "call_tool"
   if (!isKnownToolName(route.toolName)) {
     sendJson(res, 404, { error: `Unknown tool "${route.toolName}"` });

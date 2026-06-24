@@ -12,15 +12,19 @@ const INTENT_VARIANT: Record<string, "ok" | "warn" | "bad" | "neutral"> = {
   other: "neutral",
 };
 
+const CHANNEL_LABELS: Record<string, string> = {
+  sms: "SMS",
+  whatsapp: "WhatsApp",
+  missed_call: "Missed call",
+  webchat: "Webchat",
+  dm_instagram: "Instagram DM",
+  dm_facebook: "Facebook DM",
+};
+
+const REPLYABLE_CHANNELS = ["sms", "whatsapp"];
+
 function ChannelLabel({ channel }: { channel: string }) {
-  const labels: Record<string, string> = {
-    sms: "SMS",
-    missed_call: "Missed call",
-    webchat: "Webchat",
-    dm_instagram: "Instagram DM",
-    dm_facebook: "Facebook DM",
-  };
-  return <span>{labels[channel] ?? channel}</span>;
+  return <span>{CHANNEL_LABELS[channel] ?? channel}</span>;
 }
 
 export function Inbox({ onError }: { onError: (msg: string) => void }) {
@@ -33,7 +37,7 @@ export function Inbox({ onError }: { onError: (msg: string) => void }) {
   });
 
   // Reply state
-  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<{ id: string; channel: string } | null>(null);
   const [replyBody, setReplyBody] = useState("");
   const [replyResult, setReplyResult] = useState("");
 
@@ -52,7 +56,7 @@ export function Inbox({ onError }: { onError: (msg: string) => void }) {
     }
   }
 
-  async function sendReply(customerIdentifier: string) {
+  async function sendReply(customerIdentifier: string, channel: string) {
     onError("");
     setReplyResult("");
     if (!replyBody.trim()) {
@@ -62,7 +66,7 @@ export function Inbox({ onError }: { onError: (msg: string) => void }) {
     try {
       await callTool("reply_to_customer", {
         customerIdentifier,
-        channel: "sms",
+        channel,
         body: replyBody.trim(),
       });
       setReplyResult("Reply sent.");
@@ -85,7 +89,7 @@ export function Inbox({ onError }: { onError: (msg: string) => void }) {
       <div className="grid">
         <Card
           title="Customer messages"
-          hint="SMS and missed-call messages from customers. Instagram/Facebook DM ingestion is not yet wired — those channels will appear here once webhooks are connected."
+          hint="Customer messages across SMS, WhatsApp, Instagram DM, and Facebook DM. Reply is available for SMS and WhatsApp channels."
         >
           <div className="row">
             <FormField label="Since">
@@ -128,10 +132,10 @@ export function Inbox({ onError }: { onError: (msg: string) => void }) {
                     key: "reply",
                     label: "",
                     render: (m: any) =>
-                      m.channel === "sms" ? (
+                      REPLYABLE_CHANNELS.includes(m.channel) ? (
                         <button
                           onClick={() => {
-                            setReplyTo(m.customer_identifier);
+                            setReplyTo({ id: m.customer_identifier, channel: m.channel });
                             setReplyBody("");
                             setReplyResult("");
                           }}
@@ -146,7 +150,7 @@ export function Inbox({ onError }: { onError: (msg: string) => void }) {
               {replyTo && (
                 <div className="card" style={{ marginTop: "1rem" }}>
                   <p className="muted">
-                    Replying to <strong>{replyTo}</strong> via SMS
+                    Replying to <strong>{replyTo.id}</strong> via <strong>{CHANNEL_LABELS[replyTo.channel] ?? replyTo.channel}</strong>
                   </p>
                   <FormField label="Message">
                     <textarea
@@ -157,8 +161,8 @@ export function Inbox({ onError }: { onError: (msg: string) => void }) {
                     />
                   </FormField>
                   <div className="row">
-                    <button onClick={() => sendReply(replyTo)}>Send</button>
-                    <button onClick={() => setReplyTo(null)}>Cancel</button>
+                    <button onClick={() => sendReply(replyTo.id, replyTo.channel)}>Send</button>
+                    <button className="secondary" onClick={() => setReplyTo(null)}>Cancel</button>
                   </div>
                   {replyResult && <p className="muted">{replyResult}</p>}
                 </div>
