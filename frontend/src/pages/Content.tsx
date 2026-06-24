@@ -40,6 +40,7 @@ function CalendarTab({ onError }: { onError: (msg: string) => void }) {
 
   async function postNow() {
     onError("");
+    if (!window.confirm("Post now bypasses queue and owner approval — publish immediately?")) return;
     try {
       const result = await callTool<any>("post_content_now", {
         caption,

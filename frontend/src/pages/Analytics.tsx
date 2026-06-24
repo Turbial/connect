@@ -4,11 +4,20 @@ import { Card } from "../components/Card";
 import { BarChart } from "../components/BarChart";
 import { DataTable } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
+import { Tabs } from "../components/Tabs";
+import { useTab } from "../useTab";
+
+const TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "site-health", label: "Site Health" },
+];
 
 export function Analytics({ onError }: { onError: (msg: string) => void }) {
+  const [tab, setTab] = useTab("overview");
   const [scoreHistory, setScoreHistory] = useState<any[] | null>(null);
   const [platformBreakdown, setPlatformBreakdown] = useState<any[] | null>(null);
   const [revenue, setRevenue] = useState<any[] | null>(null);
+  const [signals, setSignals] = useState<any[] | null>(null);
 
   async function loadScoreHistory() {
     onError("");
@@ -40,10 +49,40 @@ export function Analytics({ onError }: { onError: (msg: string) => void }) {
     }
   }
 
+  async function loadSignals() {
+    onError("");
+    try {
+      const { output } = await callTool<any[]>("get_service_signals");
+      setSignals(output ?? []);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   return (
     <div>
-      <PageHeader title="Revenue" />
-      <div className="grid">
+      <PageHeader title="Analytics" />
+      <Tabs tabs={TABS} active={tab} onChange={setTab} />
+      {tab === "site-health" && (
+        <div className="grid">
+          <Card title="Site health signals" hint="Latest captured values from each service module (PageSpeed, mobile-friendliness, structured data, review response rate, etc.).">
+            <button onClick={loadSignals}>Load signals</button>
+            {signals !== null && (
+              <DataTable
+                emptyMessage="No signals captured yet — run a full audit to populate."
+                rows={signals}
+                columns={[
+                  { key: "module", label: "Module" },
+                  { key: "signal", label: "Signal" },
+                  { key: "value", label: "Value" },
+                  { key: "capturedAt", label: "Captured at", render: (s: any) => s.capturedAt ? new Date(s.capturedAt).toLocaleString() : "—" },
+                ]}
+              />
+            )}
+          </Card>
+        </div>
+      )}
+      {tab === "overview" && <div className="grid">
       <Card title="Visibility score trend" hint="Score history across past audits.">
         <button onClick={loadScoreHistory}>Load history</button>
         {scoreHistory && (!scoreHistory.length ? "No audits run yet." : (
@@ -91,7 +130,7 @@ export function Analytics({ onError }: { onError: (msg: string) => void }) {
           </>
         ))}
       </Card>
-      </div>
+      </div>}
     </div>
   );
 }
