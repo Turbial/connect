@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .env
+.env.*
 *.log
 
 # Built by `npm run build` (vite build --outDir src/agent-api/public);
