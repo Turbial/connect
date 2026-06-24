@@ -10,6 +10,7 @@ const TABS = [
   { key: "profile", label: "Business Profile" },
   { key: "owner-verification", label: "Owner Verification" },
   { key: "cadence", label: "Posting Cadence" },
+  { key: "autopilot", label: "Autopilot" },
   { key: "org", label: "Org & Benchmark" },
   { key: "branding", label: "Report Branding" },
 ];
@@ -147,6 +148,36 @@ function PostingCadenceTab({ onError }: { onError: (msg: string) => void }) {
   );
 }
 
+function AutopilotTab({ onError }: { onError: (msg: string) => void }) {
+  const [result, setResult] = useState("");
+
+  async function toggle(enabled: boolean) {
+    onError("");
+    setResult("");
+    try {
+      await callTool("set_autopilot", { enabled });
+      setResult(enabled ? "Autopilot on — content will post automatically without approval requests." : "Autopilot off — content will require owner approval before posting.");
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="grid">
+      <Card
+        title="Autopilot mode"
+        hint="When on, the weekly content batch posts immediately without sending an SMS/email approval to the owner. Only enable once the owner has reviewed a few approval samples and is confident in the content quality."
+      >
+        <div className="row">
+          <button onClick={() => toggle(true)}>Enable autopilot</button>
+          <button onClick={() => toggle(false)}>Disable autopilot</button>
+        </div>
+        {result && <p className="muted">{result}</p>}
+      </Card>
+    </div>
+  );
+}
+
 function OrgTab({ onError }: { onError: (msg: string) => void }) {
   const [rollup, setRollup] = useState<any>(null);
   const [benchmark, setBenchmark] = useState<{ loaded: boolean; output: any } | null>(null);
@@ -200,7 +231,17 @@ function OrgTab({ onError }: { onError: (msg: string) => void }) {
 
       <Card title="Vertical benchmark" hint="How this business compares to its industry vertical.">
         <button onClick={loadBenchmark}>Load benchmark</button>
-        {benchmark && (benchmark.output ? JSON.stringify(benchmark.output) : "Not enough vertical data yet.")}
+        {benchmark && !benchmark.output && <span className="muted">Not enough vertical data yet.</span>}
+        {benchmark?.output && (
+          <DataTable
+            emptyMessage="No benchmark data."
+            rows={Object.entries(benchmark.output as Record<string, unknown>).map(([key, val]) => ({ key, value: String(val) }))}
+            columns={[
+              { key: "key", label: "Metric" },
+              { key: "value", label: "Value" },
+            ]}
+          />
+        )}
       </Card>
 
       <Card title="Agent action queue" hint="Growth/Vertical Pro/Agency/Franchise tiers only — requires agent_action_queue feature.">
@@ -330,6 +371,7 @@ export function Settings({ onError }: { onError: (msg: string) => void }) {
       {tab === "profile" && <BusinessProfileTab onError={onError} />}
       {tab === "owner-verification" && <OwnerVerificationTab onError={onError} />}
       {tab === "cadence" && <PostingCadenceTab onError={onError} />}
+      {tab === "autopilot" && <AutopilotTab onError={onError} />}
       {tab === "org" && <OrgTab onError={onError} />}
       {tab === "branding" && <BrandingTab onError={onError} />}
     </div>

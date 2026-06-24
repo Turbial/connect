@@ -1,3 +1,4 @@
+import { safeFetch } from "../lib/safeFetch.js";
 import type { Business, ContentItem } from "../types.js";
 
 /**
@@ -67,7 +68,7 @@ export async function postToYoutube(business: Business, item: ContentItem): Prom
   const uploadSessionUrl = initRes.headers.get("location");
   if (!uploadSessionUrl) throw new Error(`YouTube upload init returned no session url for business ${business.id}`);
 
-  const videoRes = await fetch(item.media_url);
+  const videoRes = await safeFetch(item.media_url);
   if (!videoRes.ok) throw new Error(`Failed to fetch video for upload: ${videoRes.status}`);
   const videoBuffer = await videoRes.arrayBuffer();
 

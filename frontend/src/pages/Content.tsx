@@ -29,8 +29,9 @@ function CalendarTab({ onError }: { onError: (msg: string) => void }) {
   async function queueContent() {
     onError("");
     try {
-      const result = await callTool("queue_content");
-      setQueueResult(JSON.stringify(result));
+      const result = await callTool<any>("queue_content");
+      const count = result?.output?.queued ?? result?.output?.length ?? "—";
+      setQueueResult(`Queued ${count} item${count === 1 ? "" : "s"} for this week.`);
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err));
     }
@@ -45,7 +46,15 @@ function CalendarTab({ onError }: { onError: (msg: string) => void }) {
         mediaType,
         platforms: platforms.split(",").map((p) => p.trim().toLowerCase()).filter(Boolean),
       });
-      setPostNowResult(JSON.stringify(result.output ?? result));
+      const out = result.output ?? result;
+      const posted = Array.isArray(out) ? out : out?.results ?? [];
+      const succeeded = posted.filter((r: any) => !r.error).length;
+      const failed = posted.filter((r: any) => r.error).length;
+      setPostNowResult(
+        posted.length > 0
+          ? `Posted to ${succeeded} platform${succeeded !== 1 ? "s" : ""}${failed > 0 ? `, ${failed} failed` : ""}.`
+          : "Posted."
+      );
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err));
     }

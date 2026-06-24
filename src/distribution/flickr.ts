@@ -1,3 +1,4 @@
+import { safeFetch } from "../lib/safeFetch.js";
 import type { Business, ContentItem } from "../types.js";
 
 /**
@@ -20,7 +21,7 @@ export async function postToFlickr(business: Business, item: ContentItem): Promi
     throw new Error(`Flickr requires a photo; content item ${item.id} has none`);
   }
 
-  const imageRes = await fetch(item.media_url);
+  const imageRes = await safeFetch(item.media_url);
   if (!imageRes.ok) throw new Error(`Failed to fetch media for upload: ${imageRes.status}`);
   const imageBuffer = await imageRes.arrayBuffer();
 

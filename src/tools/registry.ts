@@ -20,6 +20,9 @@ import { hasFeature } from "../lib/packages.js";
 import { getReportBranding, setReportBranding } from "../lib/reportBranding.js";
 import { updateBusinessProfile, type BusinessProfileUpdate } from "../lib/businessProfile.js";
 import { sendOwnerVerificationCode, confirmOwnerVerification } from "../lib/ownerVerification.js";
+import { getInboxForBusiness, recordCustomerMessage } from "../lib/customerMessaging.js";
+import { sendApprovalSms } from "../approval/sms.js";
+import { getOrganizationForBusiness } from "../lib/orgSettings.js";
 import type { AgentActionRiskLevel, AgentActionSource, Business, ContentItem, Platform } from "../types.js";
 
 function requireFeature(business: Business, feature: Parameters<typeof hasFeature>[1]): void {
@@ -111,7 +114,10 @@ export type ToolName =
   | "update_business_profile"
   | "set_posting_cadence"
   | "send_owner_verification_code"
-  | "confirm_owner_verification";
+  | "confirm_owner_verification"
+  | "get_inbox"
+  | "reply_to_customer"
+  | "set_autopilot";
 
 /** The doc's structured-diagnosis shape for a failed tool call, used instead
  * of surfacing a bare exception string to an agent or owner. */
@@ -561,6 +567,71 @@ const TOOLS: Record<ToolName, ToolDefinition> = {
       const code = input.code;
       if (typeof code !== "string" || code.trim().length === 0) throw new Error('"code" is required.');
       return { wouldConfirmWithCode: true };
+    },
+  },
+  get_inbox: {
+    description:
+      'Lists this business\'s customer messages (SMS, missed calls, and webchat/DM once those channels are wired up) since a given date. Call with input: { "sinceISO": "2024-01-01T00:00:00.000Z" } — defaults to the last 30 days if omitted.',
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b, input) => {
+      const sinceISO = typeof input.sinceISO === "string" ? input.sinceISO : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      return getInboxForBusiness(b.id, sinceISO);
+    },
+    preview: async (_b, input) => ({
+      wouldListSince: typeof input.sinceISO === "string" ? input.sinceISO : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    }),
+  },
+  reply_to_customer: {
+    description:
+      'Sends a reply to a customer and records it in the inbox. Only the "sms" channel can actually deliver today — other channels (webchat, dm_instagram, dm_facebook) have no send integration yet and will fail rather than pretend to deliver. Call with input: { "customerIdentifier": "+15125550100", "channel": "sms", "body": "..." }.',
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b, input) => {
+      const customerIdentifier = input.customerIdentifier;
+      const channel = input.channel;
+      const body = input.body;
+      if (typeof customerIdentifier !== "string" || customerIdentifier.trim().length === 0) {
+        throw new Error('"customerIdentifier" is required.');
+      }
+      if (channel !== "sms") {
+        throw new Error(`Replying via "${String(channel)}" isn't wired up yet — only "sms" can deliver today.`);
+      }
+      if (typeof body !== "string" || body.trim().length === 0) throw new Error('"body" is required.');
+
+      const organization = await getOrganizationForBusiness(b);
+      await sendApprovalSms(customerIdentifier.trim(), body.trim(), organization?.twilio_from_number ?? null);
+      await recordCustomerMessage({
+        businessId: b.id,
+        channel: "sms",
+        direction: "outbound",
+        customerIdentifier: customerIdentifier.trim(),
+        body: body.trim(),
+      });
+      return { sent: true };
+    },
+    preview: async (_b, input) => {
+      const channel = input.channel;
+      if (channel !== "sms") {
+        throw new Error(`Replying via "${String(channel)}" isn't wired up yet — only "sms" can deliver today.`);
+      }
+      return { wouldReplyTo: input.customerIdentifier ?? null, wouldSendBody: input.body ?? null };
+    },
+  },
+  set_autopilot: {
+    description:
+      'Enables or disables autopilot mode for this business. When on, the weekly content batch posts immediately without sending an SMS/email approval request to the owner. Call with input: { "enabled": true }.',
+    riskLevel: "low",
+    approvalRequired: false,
+    run: async (b, input) => {
+      if (typeof input.enabled !== "boolean") throw new Error('"enabled" must be true or false.');
+      const { data, error } = await supabase.from("business").update({ autopilot_enabled: input.enabled }).eq("id", b.id).select().single();
+      if (error) throw error;
+      return { autopilotEnabled: (data as { autopilot_enabled: boolean }).autopilot_enabled };
+    },
+    preview: async (_b, input) => {
+      if (typeof input.enabled !== "boolean") throw new Error('"enabled" must be true or false.');
+      return { wouldSetAutopilot: input.enabled };
     },
   },
 };

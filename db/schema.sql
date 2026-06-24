@@ -851,3 +851,9 @@ create index if not exists idx_session_token on session(token);
 -- matching white_label_name's existing scope ─────────────────────────────
 alter table organization add column if not exists report_logo_url text;
 alter table organization add column if not exists report_primary_color text;
+
+-- ── Phase 18: autopilot mode — when true the weekly batch skips the
+-- owner-approval SMS/email gate and posts immediately without waiting
+-- for a YES reply. Only safe to enable once the owner has verified their
+-- phone and reviewed a few approval samples manually. ────────────────────
+alter table business add column if not exists autopilot_enabled boolean not null default false;

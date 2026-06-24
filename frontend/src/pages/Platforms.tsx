@@ -74,7 +74,7 @@ function CredentialsTab({ onError }: { onError: (msg: string) => void }) {
     try {
       const filtered = Object.fromEntries(Object.entries(values).filter(([, v]) => v));
       const result = await callTool<any>("set_platform_credentials", { platform: platform.trim(), values: filtered });
-      setResult(JSON.stringify(result.output ?? result));
+      setResult(`Credentials saved for ${platform.trim()}.`);
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err));
     }

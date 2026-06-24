@@ -260,6 +260,7 @@ export interface Business {
   boost_budget_cents: number | null;
   approval_timeout_hours: number | null;
   posting_cadence: string | null;
+  autopilot_enabled: boolean;
   brand_voice_banned_words: string[] | null;
   website_url: string | null;
   organization_id: string | null;
@@ -328,6 +329,7 @@ export interface Organization {
   boost_budget_cents: number | null;
   approval_timeout_hours: number | null;
   posting_cadence: string | null;
+  autopilot_enabled: boolean;
   brand_voice_banned_words: string[] | null;
   content_paused: boolean;
   /** Phase 8.7: per-org sender identity overrides so an agency's clients see

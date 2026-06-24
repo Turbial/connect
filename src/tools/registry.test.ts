@@ -29,6 +29,9 @@ describe("getToolCatalog", () => {
     expect(names).toContain("set_posting_cadence");
     expect(names).toContain("send_owner_verification_code");
     expect(names).toContain("confirm_owner_verification");
+    expect(names).toContain("get_inbox");
+    expect(names).toContain("reply_to_customer");
+    expect(names).toContain("set_autopilot");
 
     // Implementation details (run/preview functions) must never leak into the catalog.
     for (const entry of catalog) {

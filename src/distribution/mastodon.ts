@@ -1,3 +1,4 @@
+import { safeFetch } from "../lib/safeFetch.js";
 import type { Business, ContentItem } from "../types.js";
 
 /**
@@ -15,7 +16,7 @@ export async function postToMastodon(business: Business, item: ContentItem): Pro
 
   let mediaId: string | undefined;
   if (item.media_url) {
-    const mediaRes = await fetch(item.media_url);
+    const mediaRes = await safeFetch(item.media_url);
     if (!mediaRes.ok) throw new Error(`Failed to fetch media for upload: ${mediaRes.status}`);
     const mediaBuffer = await mediaRes.arrayBuffer();
 

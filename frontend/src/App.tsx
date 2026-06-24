@@ -13,8 +13,10 @@ import { Platforms } from "./pages/Platforms";
 import { Settings } from "./pages/Settings";
 import { Billing } from "./pages/Billing";
 import { Support } from "./pages/Support";
+import { Inbox } from "./pages/Inbox";
 
 const PAGES: Record<string, (props: { onError: (msg: string) => void }) => JSX.Element> = {
+  "/inbox": Inbox,
   "/content": Content,
   "/growth": Growth,
   "/reputation": Reputation,

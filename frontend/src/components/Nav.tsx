@@ -2,6 +2,7 @@ import { navigate } from "../router";
 
 const LINKS: { path: string; label: string }[] = [
   { path: "/", label: "Dashboard" },
+  { path: "/inbox", label: "Inbox" },
   { path: "/content", label: "Content" },
   { path: "/growth", label: "Growth" },
   { path: "/reputation", label: "Reputation" },
@@ -17,7 +18,7 @@ export function Nav({ active }: { active: string }) {
     <nav className="nav">
       {LINKS.map((link, i) => (
         <span key={link.path} style={{ display: "flex", alignItems: "center" }}>
-          {(i === 1 || i === 7) && <span className="nav-sep" />}
+          {(i === 2 || i === 8) && <span className="nav-sep" />}
           <a
             href={`#${link.path}`}
             className={active === link.path ? "active" : ""}

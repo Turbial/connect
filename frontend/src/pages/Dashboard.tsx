@@ -101,7 +101,7 @@ export function Dashboard({ onError, onLoaded }: { onError: (msg: string) => voi
         ) : (
           <ul>
             {snapshot.pendingBoosts.map((b: any, i: number) => (
-              <li key={i}>{JSON.stringify(b)}</li>
+              <li key={i}>{b.platform ?? b.type ?? b.id ?? JSON.stringify(b)}</li>
             ))}
           </ul>
         )}

@@ -31,7 +31,17 @@ async function runForBusiness(business: Business): Promise<void> {
     .eq("status", "queued");
   if (error) throw error;
 
-  await requestApproval(business, (queued ?? []) as ContentItem[]);
+  if (business.autopilot_enabled) {
+    // Autopilot: mark all queued items approved and post without waiting
+    // for the owner's SMS/email reply.
+    const ids = (queued ?? []).map((item) => (item as ContentItem).id);
+    if (ids.length > 0) {
+      await supabase.from("content_item").update({ status: "approved" }).in("id", ids);
+      await postApprovedContent(business);
+    }
+  } else {
+    await requestApproval(business, (queued ?? []) as ContentItem[]);
+  }
 }
 
 async function main(): Promise<void> {
