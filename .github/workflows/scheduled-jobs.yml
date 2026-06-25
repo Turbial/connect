@@ -15,8 +15,9 @@ on:
 
 jobs:
   weekly:
-    if: github.event.schedule == '0 13 * * 1' || github.event.inputs.job == 'weekly'
+    if: (github.event.schedule == '0 13 * * 1' || github.event.inputs.job == 'weekly') && github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -35,8 +36,9 @@ jobs:
           APPROVAL_TIMEOUT_HOURS: ${{ secrets.APPROVAL_TIMEOUT_HOURS }}
 
   collect:
-    if: github.event.schedule == '0 14 * * *' || github.event.inputs.job == 'collect'
+    if: (github.event.schedule == '0 14 * * *' || github.event.inputs.job == 'collect') && github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,8 +48,9 @@ jobs:
         env: *job-env
 
   services:
-    if: github.event.schedule == '0 14 * * *' || github.event.inputs.job == 'services'
+    if: (github.event.schedule == '0 14 * * *' || github.event.inputs.job == 'services') && github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -59,8 +62,9 @@ jobs:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
 
   connections:
-    if: github.event.schedule == '0 14 * * *' || github.event.inputs.job == 'connections'
+    if: (github.event.schedule == '0 14 * * *' || github.event.inputs.job == 'connections') && github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -70,8 +74,9 @@ jobs:
         env: *job-env
 
   visibility-score:
-    if: github.event.schedule == '0 14 * * *' || github.event.inputs.job == 'visibility-score'
+    if: (github.event.schedule == '0 14 * * *' || github.event.inputs.job == 'visibility-score') && github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
