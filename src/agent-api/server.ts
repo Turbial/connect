@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { isAuthorized, parseBearerToken } from "./auth.js";
 import { isKnownToolName, matchRoute } from "./router.js";
@@ -346,13 +347,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
       return;
     }
     const ext = contentType.split("/")[1]?.split(";")[0] ?? "bin";
-    const fileName = `upload-${Date.now()}.${ext}`;
+    const fileName = `upload-${randomBytes(12).toString("hex")}.${ext}`;
+    const MAX_UPLOAD_BYTES = 50_000_000; // 50 MB
     const chunks: Buffer[] = [];
+    let uploadSize = 0;
+    let tooLarge = false;
     await new Promise<void>((resolve, reject) => {
-      req.on("data", (chunk: Buffer) => chunks.push(chunk));
+      req.on("data", (chunk: Buffer) => {
+        uploadSize += chunk.length;
+        if (uploadSize > MAX_UPLOAD_BYTES) { tooLarge = true; req.destroy(); resolve(); return; }
+        chunks.push(chunk);
+      });
       req.on("end", resolve);
       req.on("error", reject);
     });
+    if (tooLarge) {
+      sendJson(res, 413, { error: "Upload exceeds 50 MB limit" });
+      return;
+    }
     const fileBuffer = Buffer.concat(chunks);
     const storage = createClient(supabaseUrl, supabaseServiceKey).storage;
     const { data, error: upErr } = await storage.from("connect-media").upload(fileName, fileBuffer, {
